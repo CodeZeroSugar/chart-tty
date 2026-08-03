@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
@@ -12,26 +11,22 @@ const ExampleFile = "/home/codezero/workspace/github/CodeZeroSugar/chart-tty/cha
 
 func main() {
 	fmt.Println("Welcome to chart-tty!")
-
-	parser := parser.NewParser(false)
-	song, err := parser.ParseFile(ExampleFile)
+	bytes, err := os.ReadFile(ExampleFile)
 	if err != nil {
-		fmt.Printf("[Error] failed to parse file: %v", err)
+		fmt.Printf("Error: unable to read file: %v\n", err)
+		os.Exit(1)
+	}
+	validator, err := parser.NewValidator()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	song.Normalize()
-	song.CompileLayout()
-
-	padding := strings.Repeat("-", 30)
-
-	fmt.Println("TITLE: ", song.Title)
-	fmt.Println("ARTIST: ", song.Artist)
-	for _, section := range song.CompiledSections {
-		sectionBreak := padding + section.CleanHeader + "::" + fmt.Sprintf("%d", section.Type) + padding
-		fmt.Println(sectionBreak)
-		for _, row := range section.Rows {
-			fmt.Println(row)
-		}
+	isValid, err := validator.ValidateChart(string(bytes))
+	if !isValid {
+		fmt.Printf("Error: %v", err)
+		os.Exit(1)
 	}
+
+	fmt.Println("File is a valid ChordPro chart!")
 }
