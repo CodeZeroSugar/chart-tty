@@ -21,12 +21,13 @@ func main() {
 	}
 
 	song.Normalize()
+	song.CompileLayout()
 
 	padding := strings.Repeat("-", 30)
 
 	fmt.Println("TITLE: ", song.Title)
 	fmt.Println("ARTIST: ", song.Artist)
-	for _, section := range song.Sections {
+	for _, section := range song.CompiledSections {
 		sectionBreak := padding + section.CleanHeader + "::" + fmt.Sprintf("%d", section.Type) + padding
 		fmt.Println(sectionBreak)
 		for _, row := range section.Rows {
