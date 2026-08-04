@@ -28,6 +28,9 @@ func NewValidator() (*Validator, error) {
 	if err := json.Unmarshal(embeddedSpec, &spec); err != nil {
 		return nil, fmt.Errorf("failed to initialize Validator: %w", err)
 	}
+	if len(spec.EnvironmentDirectives) == 0 || len(spec.FormattingDirectives) == 0 || len(spec.MetaDirectives) == 0 {
+		return nil, errors.New("embeded spec.json contains empty directive lists")
+	}
 	return &Validator{
 			spec:               spec,
 			AllowUnkDirectives: false,
@@ -35,7 +38,8 @@ func NewValidator() (*Validator, error) {
 		nil
 }
 
-func (v *Validator) IsValidDirective(key string) bool {
+func (v *Validator) IsValidDirective(k string) bool {
+	key := strings.ToLower(k)
 	if v.AllowUnkDirectives {
 		return true
 	}

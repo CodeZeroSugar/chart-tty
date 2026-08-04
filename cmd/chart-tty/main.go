@@ -7,7 +7,7 @@ import (
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
 
-const ExampleFile = "/home/codezero/workspace/github/CodeZeroSugar/chart-tty/charts/take_me_home.pro"
+const ExampleFile = "/home/codezero/workspace/github/CodeZeroSugar/chart-tty/charts/boulevard.pro"
 
 func main() {
 	fmt.Println("Welcome to chart-tty!")
@@ -25,8 +25,18 @@ func main() {
 	isValid, err := validator.ValidateChart(string(bytes))
 	if !isValid {
 		fmt.Printf("Error: %v", err)
-		os.Exit(1)
+	}
+	parserMode := parser.DetectParserMode(isValid, err)
+	fmt.Println("Parser Mode detected: ", parserMode)
+	if parserMode == parser.ModeChordPro {
+		fmt.Println("File is a valid ChordPro chart. Parser set to ChordPro mode.")
+	} else {
+		fmt.Println("File is not in ChordPro format. Parser set to basic mode.")
 	}
 
-	fmt.Println("File is a valid ChordPro chart!")
+	parser := parser.NewParser(parserMode)
+	_, err = parser.Parse(string(bytes))
+	if err != nil {
+		fmt.Println("Error: failure occurred during parsing: ", err)
+	}
 }
