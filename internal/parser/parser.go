@@ -46,8 +46,8 @@ func (p *Parser) parseChordPro(chart string) (*Document, error) {
 		return nil, errors.New("chart is empty, nothing to parse")
 	}
 	lines := strings.Split(strings.ReplaceAll(chart, "\r\n", "\n"), "\n")
-	for n, line := range lines {
-		parsedLine := p.parseLine(line)
+	for _, line := range lines {
+		p.parseLine(line)
 	}
 	return nil, nil
 }
