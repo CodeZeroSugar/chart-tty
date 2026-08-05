@@ -3,7 +3,7 @@ package parser
 type LineType int
 
 const (
-	LineTypeEmpty = iota
+	LineTypeEmpty LineType = iota
 	LineTypeDirective
 	LineTypeComment
 	LineTypeChordAndLyric
@@ -23,7 +23,7 @@ type Document struct {
 	Key      string
 	Tempo    string
 	Capo     string
-	Metadata map[string]string
+	Metadata map[string][]string
 	Sections []Section
 }
 

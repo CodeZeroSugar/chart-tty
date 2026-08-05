@@ -1,38 +1,18 @@
 package parser
 
 import (
-	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 )
 
-//go:embed spec.json
-var embeddedSpec []byte
-
-type ChordProSpec struct {
-	MetaDirectives        []string `json:"meta_directives"`
-	FormattingDirectives  []string `json:"formatting_directives"`
-	EnvironmentDirectives []string `json:"environment_directives"`
-}
-
 type Validator struct {
-	spec               ChordProSpec
 	AllowUnkDirectives bool
 }
 
 func NewValidator() (*Validator, error) {
-	var spec ChordProSpec
-	if err := json.Unmarshal(embeddedSpec, &spec); err != nil {
-		return nil, fmt.Errorf("failed to initialize Validator: %w", err)
-	}
-	if len(spec.EnvironmentDirectives) == 0 || len(spec.FormattingDirectives) == 0 || len(spec.MetaDirectives) == 0 {
-		return nil, errors.New("embeded spec.json contains empty directive lists")
-	}
 	return &Validator{
-			spec:               spec,
 			AllowUnkDirectives: false,
 		},
 		nil
@@ -43,7 +23,7 @@ func (v *Validator) IsValidDirective(k string) bool {
 	if v.AllowUnkDirectives {
 		return true
 	}
-	return slices.Contains(v.spec.MetaDirectives, key) || slices.Contains(v.spec.FormattingDirectives, key) || slices.Contains(v.spec.EnvironmentDirectives, key)
+	return slices.Contains(Spec.MetaDirectives, key) || slices.Contains(Spec.FormattingDirectives, key) || slices.Contains(Spec.EnvironmentDirectives, key)
 }
 
 func (v *Validator) ValidateChart(chart string) (bool, error) {
@@ -78,23 +58,4 @@ func (v *Validator) ValidateChart(chart string) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func bracketsBalanced(l string) bool {
-	inBrackets := false
-	for _, char := range l {
-		switch char {
-		case '[':
-			if inBrackets {
-				return false
-			}
-			inBrackets = true
-		case ']':
-			if !inBrackets {
-				return false
-			}
-			inBrackets = false
-		}
-	}
-	return !inBrackets
 }
