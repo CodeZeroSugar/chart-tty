@@ -24,6 +24,41 @@ func bracketsBalanced(l string) bool {
 	return !inBrackets
 }
 
+func extractBracketContents(line string) []string {
+	var contents []string
+	inBracket := false
+	var buf []rune
+
+	for _, r := range line {
+		switch r {
+		case '[':
+			inBracket = true
+			buf = buf[:0]
+		case ']':
+			if inBracket {
+				inBracket = false
+				contents = append(contents, string(buf))
+			}
+		default:
+			if inBracket {
+				buf = append(buf, r)
+			}
+		}
+	}
+	return contents
+}
+
+func validateBracketContent(raw string) bool {
+	r := strings.TrimSpace(raw)
+	if r == "" {
+		return false
+	}
+	if r[0] == '*' {
+		return true
+	}
+	return chordRegex.MatchString(r)
+}
+
 func isTabLine(s string) bool {
 	return strings.Contains(s, "--") || (strings.Contains(s, "|") && strings.Contains(s, "-"))
 }

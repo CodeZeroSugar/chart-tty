@@ -22,10 +22,10 @@ const (
 
 func init() {
 	if err := json.Unmarshal(embeddedSpec, &Spec); err != nil {
-		panic(fmt.Sprintf("failed to initialize Validator: %w\n", err))
+		panic(fmt.Sprintf("failed to initialize Validator: %v\n", err))
 	}
 	if len(Spec.EnvironmentDirectives) == 0 || len(Spec.FormattingDirectives) == 0 || len(Spec.MetaDirectives) == 0 {
-		panic(fmt.Sprintf("embeded spec.json contains empty directive lists\n"))
+		panic("embeded spec.json contains empty directive lists\n")
 	}
 }
 

@@ -3,6 +3,7 @@ package parser
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -36,17 +37,23 @@ func (p *Parser) Parse(chart string) (*Document, error) {
 
 	switch p.Mode {
 	case ModeChordPro:
-		return p.parseChordPro(chart)
+		if err := p.parseChordPro(chart); err != nil {
+			return nil, fmt.Errorf("failure during ChordPro parsing: %w", err)
+		}
+		return p.doc, nil
 	case ModeBasic:
-		return p.parseBasic(chart)
+		if err := p.parseBasic(chart); err != nil {
+			return nil, fmt.Errorf("failure during Basic parsing: %w", err)
+		}
 	default:
 		return nil, errors.New("parser error: unknown or unsupported parser mode")
 	}
+	return p.doc, nil
 }
 
-func (p *Parser) parseChordPro(chart string) (*Document, error) {
+func (p *Parser) parseChordPro(chart string) error {
 	if len(chart) == 0 {
-		return nil, errors.New("chart is empty, nothing to parse")
+		return errors.New("chart is empty, nothing to parse")
 	}
 	cleanChart := strings.ReplaceAll(chart, "\r\n", "\n")
 
@@ -63,15 +70,15 @@ func (p *Parser) parseChordPro(chart string) (*Document, error) {
 			p.shouldFlushOnBlankLine()
 		case LineTypeComment:
 		default:
-			p.currentSection.Lines = append(p.currentSection.Lines, line)
+			p.appendLine(line)
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func (p *Parser) parseBasic(chart string) (*Document, error) {
-	return nil, nil
+func (p *Parser) parseBasic(chart string) error {
+	return nil
 }
 
 func (p *Parser) parseLine(line string) ParsedLine {
@@ -153,6 +160,7 @@ func (p *Parser) handleDirective(directive, data string) {
 	directiveCategory := getDirectiveCategory(directive)
 	switch directiveCategory {
 	case CategoryEnvironment:
+		p.handleEnvironmentDirective(directive, data)
 	case CategoryFormatting:
 	case CategoryMeta:
 		p.handleMetaDirective(directive, data)
@@ -213,4 +221,14 @@ func (p *Parser) flushSection() {
 
 func (p *Parser) shouldFlushOnBlankLine() bool {
 	return p.currentSection != nil && p.activeEnv != ""
+}
+
+func (p *Parser) appendLine(line ParsedLine) {
+	if p.currentSection == nil {
+		p.currentSection = &Section{
+			Name:  "",
+			Lines: make([]ParsedLine, 0),
+		}
+	}
+	p.currentSection.Lines = append(p.currentSection.Lines, line)
 }

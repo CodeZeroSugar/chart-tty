@@ -14,18 +14,20 @@ func TestNewValidator(t *testing.T) {
 		t.Fatal("NewValidator() returned nil validator")
 	}
 
-	if len(v.spec.MetaDirectives) == 0 {
-		t.Error("embedded spec has no meta directives")
-	}
-	if len(v.spec.FormattingDirectives) == 0 {
-		t.Error("embedded spec has no formatting directives")
-	}
-	if len(v.spec.EnvironmentDirectives) == 0 {
-		t.Error("embedded spec has no environment directives")
-	}
-
 	if v.AllowUnkDirectives {
 		t.Error("AllowUnkDirectives should default to false")
+	}
+}
+
+func TestSpecPopulated(t *testing.T) {
+	if len(Spec.MetaDirectives) == 0 {
+		t.Error("Spec.MetaDirectives is empty")
+	}
+	if len(Spec.FormattingDirectives) == 0 {
+		t.Error("Spec.FormattingDirectives is empty")
+	}
+	if len(Spec.EnvironmentDirectives) == 0 {
+		t.Error("Spec.EnvironmentDirectives is empty")
 	}
 }
 
@@ -45,7 +47,7 @@ func TestIsValidDirective(t *testing.T) {
 		{"meta artist", "artist", true},
 		{"formatting comment", "comment", true},
 		{"formatting short alias", "c", true},
-		{"formatting highlight (spec typo)", "highlight", true},
+		{"formatting highlight", "highlight", true},
 		{"environment soc", "soc", true},
 		{"environment start_of_chorus", "start_of_chorus", true},
 		{"environment eog", "eog", true},
@@ -123,7 +125,37 @@ Comin' for to carry me [A7]home.
 		},
 		{
 			name:      "complex chord names",
-			chart:     `[C#m7b5] [G/B] [N.C.] [F#maj7]`,
+			chart:     `[Dm7] [G/B] [F#maj7] [C#m] [Eaug] [Gsus4] [Bbm7]`,
+			wantValid: true,
+		},
+		{
+			name:      "half-diminished seventh",
+			chart:     `[C#m7b5]`,
+			wantValid: true,
+		},
+		{
+			name:      "seventh suspended fourth",
+			chart:     `[A7sus4]`,
+			wantValid: true,
+		},
+		{
+			name:      "altered and extended dominants",
+			chart:     `[C7b5] [C7#9] [C7alt] [C9] [C11] [C13]`,
+			wantValid: true,
+		},
+		{
+			name:      "major and minor extensions",
+			chart:     `[Cmaj9] [Cmmaj7] [Am9] [Amadd9] [Dm9maj7]`,
+			wantValid: true,
+		},
+		{
+			name:      "six-nine forms",
+			chart:     `[C69] [G6/9]`,
+			wantValid: true,
+		},
+		{
+			name:      "suspended variants",
+			chart:     `[C7sus4] [C6sus2] [C13sus4] [Csus2]`,
 			wantValid: true,
 		},
 		{
@@ -137,8 +169,13 @@ Comin' for to carry me [A7]home.
 			wantValid: true,
 		},
 		{
-			name:      "riff marker brackets",
-			chart:     "[----]",
+			name:      "asterisk prefixed bracket content",
+			chart:     "[*N.C.]",
+			wantValid: true,
+		},
+		{
+			name:      "asterisk escaped riff marker",
+			chart:     "[*----]",
 			wantValid: true,
 		},
 		{
@@ -226,6 +263,42 @@ Comin' for to carry me [A7]home.
 			chart:          "[A] [G",
 			wantValid:      false,
 			wantErrContain: "invalid brackets",
+		},
+		{
+			name:           "no-chord marker rejected without asterisk",
+			chart:          "[N.C.]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
+		},
+		{
+			name:           "riff marker rejected without asterisk",
+			chart:          "[----]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
+		},
+		{
+			name:           "non-chord text rejected",
+			chart:          "[foo]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
+		},
+		{
+			name:           "out-of-range root rejected",
+			chart:          "[H]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
+		},
+		{
+			name:           "empty bracket rejected",
+			chart:          "[]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
+		},
+		{
+			name:           "numeric-only bracket rejected",
+			chart:          "[1]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
 		},
 	}
 

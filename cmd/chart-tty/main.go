@@ -3,15 +3,27 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
 
-const ExampleFile = "/home/codezero/workspace/github/CodeZeroSugar/chart-tty/charts/boulevard.pro"
+const ExampleFile = "/home/codezero/workspace/github/CodeZeroSugar/chart-tty/charts/swing_low.pro"
 
 func main() {
+	args := os.Args
+	if len(args) < 2 {
+		fmt.Println("Please provide path to chord chart")
+		os.Exit(1)
+	}
+	absPath, err := filepath.Abs(args[1])
+	if err != nil {
+		fmt.Println("Failed to resolve path: ", args[1])
+		os.Exit(1)
+	}
+
 	fmt.Println("Welcome to chart-tty!")
-	bytes, err := os.ReadFile(ExampleFile)
+	bytes, err := os.ReadFile(absPath)
 	if err != nil {
 		fmt.Printf("Error: unable to read file: %v\n", err)
 		os.Exit(1)
@@ -35,8 +47,10 @@ func main() {
 	}
 
 	parser := parser.NewParser(parserMode)
-	_, err = parser.Parse(string(bytes))
+	doc, err := parser.Parse(string(bytes))
 	if err != nil {
 		fmt.Println("Error: failure occurred during parsing: ", err)
 	}
+	pretty := doc.String()
+	fmt.Println(pretty)
 }
