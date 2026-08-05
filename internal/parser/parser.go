@@ -18,6 +18,7 @@ type Parser struct {
 
 	doc            *Document
 	currentSection *Section
+	activeEnv      string
 }
 
 func NewParser(mode ParserMode) *Parser {
@@ -28,7 +29,7 @@ func NewParser(mode ParserMode) *Parser {
 
 func (p *Parser) Parse(chart string) (*Document, error) {
 	p.doc = &Document{
-		Metadata: make(map[string]string),
+		Metadata: make(map[string][]string, 0),
 		Sections: make([]Section, 0),
 	}
 	p.currentSection = nil
@@ -49,23 +50,20 @@ func (p *Parser) parseChordPro(chart string) (*Document, error) {
 	}
 	cleanChart := strings.ReplaceAll(chart, "\r\n", "\n")
 
-	var document Document
-
 	var parsedLines []ParsedLine
 	for line := range strings.SplitSeq(cleanChart, "\n") {
 		parsedLines = append(parsedLines, p.parseLine(line))
 	}
 
-	for idx, line := range parsedLines {
+	for _, line := range parsedLines {
 		switch line.Type {
 		case LineTypeDirective:
-			directive, data := extractDirective(line.Raw)
-			if directive == "title" || directive == "t" {
-				document.Title = data
-			}
-			if directive == "subtitle" || directive == "st" || directive == "artist" {
-				document.Artist = data
-			}
+			p.handleDirective(extractDirective(line.Raw))
+		case LineTypeEmpty:
+			p.shouldFlushOnBlankLine()
+		case LineTypeComment:
+		default:
+			p.currentSection.Lines = append(p.currentSection.Lines, line)
 		}
 	}
 
@@ -151,19 +149,6 @@ func (p *Parser) parseLine(line string) ParsedLine {
 	}
 }
 
-func (p *Parser) buildSection(parsedLines []ParsedLine) (int, Section) {
-	if len(parsedLines) == 0 {
-		return 0, Section{}
-	}
-
-	for idex, line := range parsedLines {
-		switch line.Type {
-		case LineTypeDirective:
-			p.handleDirective(extractDirective(line.Raw))
-		}
-	}
-}
-
 func (p *Parser) handleDirective(directive, data string) {
 	directiveCategory := getDirectiveCategory(directive)
 	switch directiveCategory {
@@ -172,6 +157,26 @@ func (p *Parser) handleDirective(directive, data string) {
 	case CategoryMeta:
 		p.handleMetaDirective(directive, data)
 	case CategoryUnknown:
+	}
+}
+
+func (p *Parser) handleEnvironmentDirective(directive, data string) {
+	action, env, ok := parseEnvDirective(directive)
+	if !ok {
+		return
+	}
+	label := data
+	if label == "" {
+		label = env
+	}
+	if action == "start" {
+		p.flushSection()
+		p.activeEnv = env
+		p.currentSection = &Section{Name: label}
+	} else if action == "end" {
+		if p.activeEnv == env || p.activeEnv != "" {
+			p.flushSection()
+		}
 	}
 }
 
@@ -189,7 +194,6 @@ func (p *Parser) handleMetaDirective(directive, data string) {
 		p.doc.Capo = data
 	default:
 		if _, exists := p.doc.Metadata[directive]; !exists && data != "" {
-			p.doc.Metadata[directive] = make([]string, 0)
 			p.doc.Metadata[directive] = append(p.doc.Metadata[directive], data)
 		} else {
 			if data != "" {
@@ -197,4 +201,16 @@ func (p *Parser) handleMetaDirective(directive, data string) {
 			}
 		}
 	}
+}
+
+func (p *Parser) flushSection() {
+	if p.currentSection != nil && len(p.currentSection.Lines) > 0 {
+		p.doc.Sections = append(p.doc.Sections, *p.currentSection)
+	}
+	p.currentSection = nil
+	p.activeEnv = ""
+}
+
+func (p *Parser) shouldFlushOnBlankLine() bool {
+	return p.currentSection != nil && p.activeEnv != ""
 }

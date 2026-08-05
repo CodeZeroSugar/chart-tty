@@ -59,3 +59,38 @@ func getDirectiveCategory(directive string) DirectiveCategory {
 	}
 	return CategoryUnknown
 }
+
+func parseEnvDirective(directive string) (actionType string, envName string, ok bool) {
+	d := strings.ToLower(strings.TrimSpace(directive))
+
+	switch {
+	case strings.HasPrefix(d, "start_of_"):
+		return "start", strings.TrimPrefix(d, "start_of_"), true
+	case strings.HasPrefix(d, "end_of_"):
+		return "end", strings.TrimPrefix(d, "end_of_"), true
+	case strings.HasPrefix(d, "so") && len(d) == 3:
+		return "start", resolveAlias(d[2:]), true
+	case strings.HasPrefix(d, "eo") && len(d) == 3:
+		return "end", resolveAlias(d[2:]), true
+	case d == "chorus":
+		return "start", "chorus", true
+	}
+	return "", "", false
+}
+
+func resolveAlias(char string) string {
+	switch char {
+	case "v":
+		return "verse"
+	case "c":
+		return "chorus"
+	case "b":
+		return "bridge"
+	case "t":
+		return "tab"
+	case "g":
+		return "grid"
+	default:
+		return char
+	}
+}
