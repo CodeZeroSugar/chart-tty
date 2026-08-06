@@ -67,13 +67,15 @@ func (p *Parser) parseChordPro(chart string) error {
 		case LineTypeDirective:
 			p.handleDirective(extractDirective(line.Raw))
 		case LineTypeEmpty:
-			p.shouldFlushOnBlankLine()
+			if p.shouldFlushOnBlankLine() {
+				p.flushSection()
+			}
 		case LineTypeComment:
 		default:
 			p.appendLine(line)
 		}
 	}
-
+	p.flushSection()
 	return nil
 }
 
@@ -157,13 +159,14 @@ func (p *Parser) parseLine(line string) ParsedLine {
 }
 
 func (p *Parser) handleDirective(directive, data string) {
-	directiveCategory := getDirectiveCategory(directive)
+	directiveLower := strings.ToLower(directive)
+	directiveCategory := getDirectiveCategory(directiveLower)
 	switch directiveCategory {
 	case CategoryEnvironment:
-		p.handleEnvironmentDirective(directive, data)
+		p.handleEnvironmentDirective(directiveLower, data)
 	case CategoryFormatting:
 	case CategoryMeta:
-		p.handleMetaDirective(directive, data)
+		p.handleMetaDirective(directiveLower, data)
 	case CategoryUnknown:
 	}
 }
@@ -177,11 +180,12 @@ func (p *Parser) handleEnvironmentDirective(directive, data string) {
 	if label == "" {
 		label = env
 	}
-	if action == "start" {
+	switch action {
+	case "start":
 		p.flushSection()
 		p.activeEnv = env
 		p.currentSection = &Section{Name: label}
-	} else if action == "end" {
+	case "end":
 		if p.activeEnv == env || p.activeEnv != "" {
 			p.flushSection()
 		}
@@ -220,7 +224,7 @@ func (p *Parser) flushSection() {
 }
 
 func (p *Parser) shouldFlushOnBlankLine() bool {
-	return p.currentSection != nil && p.activeEnv != ""
+	return p.currentSection != nil && p.activeEnv == ""
 }
 
 func (p *Parser) appendLine(line ParsedLine) {

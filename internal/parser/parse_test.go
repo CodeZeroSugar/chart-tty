@@ -263,6 +263,67 @@ func TestParseBlankLinesDoNotFlush(t *testing.T) {
 	}
 }
 
+func TestParseBlankLinesFlushOutsideEnvironment(t *testing.T) {
+	chart := "Swing low\n\nSweet chariot"
+	doc := parseChart(t, chart)
+
+	want := []Section{
+		{
+			Name: "",
+			Lines: []ParsedLine{
+				{Type: LineTypeLyric, Raw: "Swing low", Lyrics: "Swing low"},
+			},
+		},
+		{
+			Name: "",
+			Lines: []ParsedLine{
+				{Type: LineTypeLyric, Raw: "Sweet chariot", Lyrics: "Sweet chariot"},
+			},
+		},
+	}
+	if !reflect.DeepEqual(doc.Sections, want) {
+		t.Errorf("Sections = %#v, want %#v (blank line outside env splits sections)", doc.Sections, want)
+	}
+}
+
+func TestParseBlankLineAfterEnvCloseDoesNotCreateSection(t *testing.T) {
+	chart := "{soc}\nline1\n{eoc}\n\nline2"
+	doc := parseChart(t, chart)
+
+	want := []Section{
+		{
+			Name: "chorus",
+			Lines: []ParsedLine{
+				{Type: LineTypeLyric, Raw: "line1", Lyrics: "line1"},
+			},
+		},
+		{
+			Name: "",
+			Lines: []ParsedLine{
+				{Type: LineTypeLyric, Raw: "line2", Lyrics: "line2"},
+			},
+		},
+	}
+	if !reflect.DeepEqual(doc.Sections, want) {
+		t.Errorf("Sections = %#v, want %#v (blank after {eoc} must not create a spurious section)", doc.Sections, want)
+	}
+}
+
+func TestParseConsecutiveBlankLinesSingleFlush(t *testing.T) {
+	chart := "Swing low\n\n\nSweet chariot"
+	doc := parseChart(t, chart)
+
+	if len(doc.Sections) != 2 {
+		t.Fatalf("Sections = %#v, want 2 sections (consecutive blank lines flush once)", doc.Sections)
+	}
+	if len(doc.Sections[0].Lines) != 1 || len(doc.Sections[1].Lines) != 1 {
+		t.Errorf("Sections = %#v, want one line per section", doc.Sections)
+	}
+	if doc.Sections[0].Lines[0].Lyrics != "Swing low" || doc.Sections[1].Lines[0].Lyrics != "Sweet chariot" {
+		t.Errorf("Lyrics = %q, %q, want %q, %q", doc.Sections[0].Lines[0].Lyrics, doc.Sections[1].Lines[0].Lyrics, "Swing low", "Sweet chariot")
+	}
+}
+
 func TestParseIgnoresCommentsFormattingUnknown(t *testing.T) {
 	chart := `# a comment
 {comment: Chorus}

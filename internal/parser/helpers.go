@@ -83,13 +83,14 @@ func extractDirective(directiveLine string) (directive string, data string) {
 }
 
 func getDirectiveCategory(directive string) DirectiveCategory {
-	if slices.Contains(Spec.EnvironmentDirectives, directive) {
+	d := strings.ToLower(directive)
+	if slices.Contains(Spec.EnvironmentDirectives, d) {
 		return CategoryEnvironment
 	}
-	if slices.Contains(Spec.FormattingDirectives, directive) {
+	if slices.Contains(Spec.FormattingDirectives, d) {
 		return CategoryFormatting
 	}
-	if slices.Contains(Spec.MetaDirectives, directive) {
+	if slices.Contains(Spec.MetaDirectives, d) {
 		return CategoryMeta
 	}
 	return CategoryUnknown
