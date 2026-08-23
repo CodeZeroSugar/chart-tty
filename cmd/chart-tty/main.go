@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,14 +11,16 @@ import (
 )
 
 func main() {
-	args := os.Args
-	if len(args) < 2 {
+	transposeFlag := flag.Int("transpose", 0, "transpose chords by N semitones")
+	flag.Parse()
+	args := flag.Args()
+	if len(args) < 1 {
 		fmt.Println("Please provide path to chord chart")
 		os.Exit(1)
 	}
-	absPath, err := filepath.Abs(args[1])
+	absPath, err := filepath.Abs(args[0])
 	if err != nil {
-		fmt.Println("Failed to resolve path: ", args[1])
+		fmt.Println("Failed to resolve path: ", args[0])
 		os.Exit(1)
 	}
 
@@ -48,12 +51,14 @@ func main() {
 	cfg := ui.RenderConfig{}
 	fi, _ := os.Stdout.Stat()
 	if (fi.Mode() & os.ModeCharDevice) != 0 {
-		if err := ui.Run(doc, cfg); err != nil {
+		m := ui.NewDocModel(doc, cfg).SetTranspose(*transposeFlag)
+		if err := ui.RunModel(m); err != nil {
 			fmt.Printf("Error: TUI failed: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
+	doc.Transpose(*transposeFlag)
 	for _, line := range ui.Render(doc, cfg) {
 		fmt.Println(line)
 	}

@@ -10,14 +10,16 @@ import (
 )
 
 type Model struct {
-	lines    []string
-	offset   int
-	width    int
-	height   int
-	title    string
-	cfg      RenderConfig
-	quitting bool
-	showHelp bool
+	lines     []string
+	doc       *parser.Document
+	transpose int
+	offset    int
+	width     int
+	height    int
+	title     string
+	cfg       RenderConfig
+	quitting  bool
+	showHelp  bool
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
@@ -26,6 +28,7 @@ func NewModel(lines []string, cfg RenderConfig) Model {
 
 func NewDocModel(doc *parser.Document, cfg RenderConfig) Model {
 	m := NewModel(Render(doc, cfg), cfg)
+	m.doc = doc
 	m.title = doc.Title
 	return m
 }
@@ -37,6 +40,16 @@ func (m Model) SetTitle(title string) Model {
 
 func (m Model) SetShowHelp(show bool) Model {
 	m.showHelp = show
+	return m
+}
+
+func (m Model) SetTranspose(n int) Model {
+	if m.doc == nil {
+		return m
+	}
+	m.doc.Transpose(n)
+	m.transpose += n
+	m.lines = Render(m.doc, m.cfg)
 	return m
 }
 
@@ -64,6 +77,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.offset = 0
 		case "end", "G":
 			m.offset = len(m.lines)
+		case "+", "=":
+			if m.doc != nil {
+				m.doc.Transpose(1)
+				m.transpose++
+				m.lines = Render(m.doc, m.cfg)
+			}
+		case "-", "_":
+			if m.doc != nil {
+				m.doc.Transpose(-1)
+				m.transpose--
+				m.lines = Render(m.doc, m.cfg)
+			}
 		}
 	}
 	m.clampOffset()
@@ -85,8 +110,12 @@ func (m *Model) clampOffset() {
 
 func (m Model) View() string {
 	var sb strings.Builder
-	if m.title != "" {
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Render(m.title))
+	title := m.title
+	if k := m.currentKey(); k != "" {
+		title += " · Key: " + k
+	}
+	if title != "" {
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render(title))
 		sb.WriteString("\n")
 	}
 	top := m.offset
@@ -102,17 +131,33 @@ func (m Model) View() string {
 	}
 	if m.showHelp {
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · q quit"))
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · +/- transpose · q quit"))
 	}
 	return sb.String()
+}
+
+func (m Model) currentKey() string {
+	if m.doc == nil || m.doc.Key == "" {
+		return ""
+	}
+	c, err := parser.ParseChord(m.doc.Key)
+	if err != nil {
+		return m.doc.Key
+	}
+	return c.Transpose(m.transpose).String()
 }
 
 func (m Model) Quitting() bool { return m.quitting }
 
 func (m Model) Offset() int { return m.offset }
 
+func (m Model) Transpose() int { return m.transpose }
+
 func Run(doc *parser.Document, cfg RenderConfig) error {
-	m := NewDocModel(doc, cfg)
+	return RunModel(NewDocModel(doc, cfg))
+}
+
+func RunModel(m Model) error {
 	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err

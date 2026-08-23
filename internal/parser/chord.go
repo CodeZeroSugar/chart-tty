@@ -87,3 +87,18 @@ func (c Chord) Transpose(n int) Chord {
 	}
 	return Chord{Root: root, Qual: c.Qual, Ext: c.Ext, Bass: bass}
 }
+
+func (d *Document) Transpose(n int) {
+	for i := range d.Sections {
+		for j := range d.Sections[i].Lines {
+			line := &d.Sections[i].Lines[j]
+			for k := range line.Chords {
+				c, err := ParseChord(line.Chords[k].Name)
+				if err != nil {
+					continue
+				}
+				line.Chords[k].Name = c.Transpose(n).String()
+			}
+		}
+	}
+}

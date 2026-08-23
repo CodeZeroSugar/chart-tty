@@ -147,3 +147,78 @@ func TestNewDocModel(t *testing.T) {
 		t.Errorf("lines = %#v, want %#v", m.lines, wantLines)
 	}
 }
+
+func TestModelTransposeKeys(t *testing.T) {
+	doc := &parser.Document{
+		Title:    "Swing Low",
+		Key:      "G",
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{
+			{
+				Name: "",
+				Lines: []parser.ParsedLine{
+					{Type: parser.LineTypeChordAndLyric, Raw: "[C] home", Lyrics: "home", Chords: []parser.ChordToken{{Name: "C", Position: 0}}},
+				},
+			},
+		},
+	}
+	m := update(t, NewDocModel(doc, RenderConfig{}), tea.WindowSizeMsg{Width: 40, Height: 10})
+
+	view := m.View()
+	if !strings.Contains(view, "Key: G") {
+		t.Errorf("view %q does not show original key", view)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+	if m.Transpose() != 1 {
+		t.Errorf("transpose = %d, want 1", m.Transpose())
+	}
+	view = m.View()
+	if !strings.Contains(view, "C#") {
+		t.Errorf("view %q does not contain transposed chord C#", view)
+	}
+	if !strings.Contains(view, "Key: G#") {
+		t.Errorf("view %q does not show transposed key", view)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("-")})
+	if m.Transpose() != 0 {
+		t.Errorf("transpose = %d, want 0", m.Transpose())
+	}
+	if got := m.View(); strings.Contains(got, "C#") {
+		t.Errorf("view %q still contains C# after transpose back", got)
+	}
+}
+
+func TestModelSetTranspose(t *testing.T) {
+	doc := &parser.Document{
+		Title:    "Song",
+		Key:      "C",
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{
+			{
+				Name: "",
+				Lines: []parser.ParsedLine{
+					{Type: parser.LineTypeChordAndLyric, Raw: "[F] here", Lyrics: "here", Chords: []parser.ChordToken{{Name: "F", Position: 0}}},
+				},
+			},
+		},
+	}
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetTranspose(2), tea.WindowSizeMsg{Width: 40, Height: 10})
+	if m.Transpose() != 2 {
+		t.Errorf("transpose = %d, want 2", m.Transpose())
+	}
+	if got := m.View(); !strings.Contains(got, "G") || !strings.Contains(got, "Key: D") {
+		t.Errorf("view %q does not show transposed F->G and key D", got)
+	}
+}
+
+func TestModelTransposeNoDocIsNoop(t *testing.T) {
+	m := update(t, NewModel(testLines(3), RenderConfig{}), tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+	if got := m.Offset(); got != 0 {
+		t.Errorf("offset = %d, want unchanged 0", got)
+	}
+	if got := m.View(); strings.Contains(got, "line1") {
+		t.Errorf("view %q unchanged lines expected", got)
+	}
+}

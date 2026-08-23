@@ -197,3 +197,45 @@ func TestTransposePreservesSuffix(t *testing.T) {
 		t.Errorf("Root = %q, want %q (C#+3)", got.Root, "E")
 	}
 }
+
+func TestDocumentTranspose(t *testing.T) {
+	doc := &Document{
+		Title:    "T",
+		Key:      "C",
+		Metadata: map[string][]string{},
+		Sections: []Section{
+			{
+				Name: "",
+				Lines: []ParsedLine{
+					{
+						Type:   LineTypeChordAndLyric,
+						Raw:    "[C] home",
+						Lyrics: "home",
+						Chords: []ChordToken{{Name: "C", Position: 0}, {Name: "G", Position: 5}, {Name: "Riff", Position: 9}, {Name: "", Position: 11}},
+					},
+				},
+			},
+		},
+	}
+
+	doc.Transpose(2)
+
+	chords := doc.Sections[0].Lines[0].Chords
+	want := []ChordToken{{Name: "D", Position: 0}, {Name: "A", Position: 5}, {Name: "Riff", Position: 9}, {Name: "", Position: 11}}
+	for i := range want {
+		if chords[i].Name != want[i].Name {
+			t.Errorf("chords[%d].Name = %q, want %q", i, chords[i].Name, want[i].Name)
+		}
+		if chords[i].Position != want[i].Position {
+			t.Errorf("chords[%d].Position = %d, want %d", i, chords[i].Position, want[i].Position)
+		}
+	}
+	if doc.Key != "C" {
+		t.Errorf("Key mutated to %q, want original %q", doc.Key, "C")
+	}
+
+	doc.Transpose(-2)
+	if chords[0].Name != "C" || chords[1].Name != "G" {
+		t.Errorf("roundtrip transpose chords = %q, %q, want %q, %q", chords[0].Name, chords[1].Name, "C", "G")
+	}
+}
