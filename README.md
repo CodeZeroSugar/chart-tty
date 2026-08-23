@@ -121,6 +121,22 @@ keep charts on your machine; any other endpoint sends the chart text to that ser
 Endpoint, key, and model come from the `[ai]` config section or the env vars
 `CHART_TTY_BASE_URL`, `CHART_TTY_API_KEY`, `CHART_TTY_MODEL`.
 
+### Example: OpenCode Go
+
+[OpenCode Go](https://opencode.ai/docs/zen/) exposes an OpenAI-compatible endpoint that
+serves DeepSeek, GLM, Kimi and other open models — one key, no code changes needed:
+
+```toml
+[ai]
+base_url = "https://opencode.ai/zen/go/v1"
+api_key = ""                  # set via: chart-tty --set-api-key <key>
+model = "deepseek-v4-flash"   # or deepseek-v4-pro
+```
+
+```sh
+chart-tty --ai-convert --write messy-chart.txt
+```
+
 To store the key in your config file (comments and other settings are preserved):
 
 ```sh
