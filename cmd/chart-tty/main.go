@@ -6,9 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
+	"github.com/CodeZeroSugar/chart-tty/internal/ui"
 )
-
-const ExampleFile = "/home/codezero/workspace/github/CodeZeroSugar/chart-tty/charts/swing_low.pro"
 
 func main() {
 	args := os.Args
@@ -22,7 +21,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Welcome to chart-tty!")
 	bytes, err := os.ReadFile(absPath)
 	if err != nil {
 		fmt.Printf("Error: unable to read file: %v\n", err)
@@ -39,18 +37,24 @@ func main() {
 		fmt.Printf("Error: %v", err)
 	}
 	parserMode := parser.DetectParserMode(isValid, err)
-	fmt.Println("Parser Mode detected: ", parserMode)
-	if parserMode == parser.ModeChordPro {
-		fmt.Println("File is a valid ChordPro chart. Parser set to ChordPro mode.")
-	} else {
-		fmt.Println("File is not in ChordPro format. Parser set to basic mode.")
-	}
 
 	parser := parser.NewParser(parserMode)
 	doc, err := parser.Parse(string(bytes))
 	if err != nil {
 		fmt.Println("Error: failure occurred during parsing: ", err)
+		os.Exit(1)
 	}
-	pretty := doc.String()
-	fmt.Println(pretty)
+
+	cfg := ui.RenderConfig{}
+	fi, _ := os.Stdout.Stat()
+	if (fi.Mode() & os.ModeCharDevice) != 0 {
+		if err := ui.Run(doc, cfg); err != nil {
+			fmt.Printf("Error: TUI failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	for _, line := range ui.Render(doc, cfg) {
+		fmt.Println(line)
+	}
 }

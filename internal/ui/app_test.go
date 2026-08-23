@@ -1,0 +1,149 @@
+package ui
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/CodeZeroSugar/chart-tty/internal/parser"
+)
+
+func testLines(n int) []string {
+	lines := make([]string, n)
+	for i := range lines {
+		lines[i] = "line" + string(rune('0'+i))
+	}
+	return lines
+}
+
+func update(t *testing.T, m Model, msg tea.Msg) Model {
+	t.Helper()
+	nm, _ := m.Update(msg)
+	m2, ok := nm.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T, want Model", nm)
+	}
+	return m2
+}
+
+func TestModelScroll(t *testing.T) {
+	m := update(t, NewModel(testLines(10), RenderConfig{}), tea.WindowSizeMsg{Width: 20, Height: 4})
+
+	if got := m.View(); !strings.Contains(got, "line0") || !strings.Contains(got, "line3") {
+		t.Errorf("initial view = %q, want lines 0-3", got)
+	}
+	if strings.Contains(m.View(), "line4") {
+		t.Errorf("initial view = %q, must not contain line4", m.View())
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyDown})
+	if got := m.Offset(); got != 1 {
+		t.Errorf("after down offset = %d, want 1", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if got := m.Offset(); got != 2 {
+		t.Errorf("after j offset = %d, want 2", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyPgDown})
+	if got := m.Offset(); got != 6 {
+		t.Errorf("after pgdown offset = %d, want 6", got)
+	}
+	if got := m.View(); !strings.Contains(got, "line6") || !strings.Contains(got, "line9") {
+		t.Errorf("bottom view = %q, want lines 6-9", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyDown})
+	if got := m.Offset(); got != 6 {
+		t.Errorf("after extra down offset = %d, want clamp at 6", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyHome})
+	if got := m.Offset(); got != 0 {
+		t.Errorf("after home offset = %d, want 0", got)
+	}
+}
+
+func TestModelScrollUpClamps(t *testing.T) {
+	m := update(t, NewModel(testLines(5), RenderConfig{}), tea.WindowSizeMsg{Width: 20, Height: 2})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyUp})
+	if got := m.Offset(); got != 0 {
+		t.Errorf("offset = %d, want 0 (clamp at top)", got)
+	}
+}
+
+func TestModelQuit(t *testing.T) {
+	m := update(t, NewModel(testLines(3), RenderConfig{}), tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if !m.Quitting() {
+		t.Error("q did not quit")
+	}
+
+	m = update(t, NewModel(testLines(3), RenderConfig{}), tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !m.Quitting() {
+		t.Error("ctrl+c did not quit")
+	}
+}
+
+func TestModelResize(t *testing.T) {
+	m := update(t, NewModel(testLines(10), RenderConfig{}), tea.WindowSizeMsg{Width: 20, Height: 8})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyPgDown}) // offset 8, max 2
+	if got := m.Offset(); got != 2 {
+		t.Errorf("offset after resize+pgdown = %d, want 2", got)
+	}
+	m = update(t, m, tea.WindowSizeMsg{Width: 20, Height: 3}) // max becomes 7
+	if got := m.Offset(); got != 2 {
+		t.Errorf("offset after shrink = %d, want unchanged 2", got)
+	}
+	m = update(t, m, tea.WindowSizeMsg{Width: 20, Height: 1}) // max becomes 9
+	if got := m.Offset(); got != 2 {
+		t.Errorf("offset after further shrink = %d, want unchanged 2", got)
+	}
+}
+
+func TestModelViewTitleAndHelp(t *testing.T) {
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetTitle("Swing Low"), tea.WindowSizeMsg{Width: 40, Height: 10})
+
+	view := m.View()
+	if !strings.Contains(view, "Swing Low") {
+		t.Errorf("view %q does not contain title", view)
+	}
+	if !strings.Contains(view, "j/k scroll") {
+		t.Errorf("view %q does not contain help text", view)
+	}
+	if !strings.Contains(view, "line2") {
+		t.Errorf("view %q does not contain body lines", view)
+	}
+}
+
+func TestModelViewNoHelp(t *testing.T) {
+	m := update(t, NewModel(testLines(2), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 10})
+	if strings.Contains(m.View(), "j/k scroll") {
+		t.Errorf("view %q should not contain help", m.View())
+	}
+}
+
+func TestNewDocModel(t *testing.T) {
+	doc := &parser.Document{
+		Title:    "Swing Low",
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{
+			{
+				Name: "chorus",
+				Lines: []parser.ParsedLine{
+					{Type: parser.LineTypeChordAndLyric, Raw: "Swing [D]low", Lyrics: "Swing low", Chords: []parser.ChordToken{{Name: "D", Position: 6}}},
+				},
+			},
+		},
+	}
+	m := NewDocModel(doc, RenderConfig{})
+	if m.title != "Swing Low" {
+		t.Errorf("title = %q, want %q", m.title, "Swing Low")
+	}
+	wantLines := []string{"[chorus]", "      D  ", "Swing low"}
+	if !reflect.DeepEqual(m.lines, wantLines) {
+		t.Errorf("lines = %#v, want %#v", m.lines, wantLines)
+	}
+}
