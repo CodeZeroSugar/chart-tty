@@ -18,6 +18,19 @@ func TestBuildPrompt(t *testing.T) {
 	if !strings.Contains(system, "[*N.C.]") {
 		t.Error("system prompt lacks asterisk escape rule")
 	}
+	for _, want := range []string{
+		"individually bracketed",
+		"[*x2]",
+		"[*Repeat intro]",
+		"[Fm] [G#] [Eb] [Bb]",
+		"{start_of_verse: Verse 1}",
+		"Never truncate",
+		"chord-over-lyrics",
+	} {
+		if !strings.Contains(system, want) {
+			t.Errorf("system prompt missing %q", want)
+		}
+	}
 	if user != chart {
 		t.Errorf("user prompt = %q, want raw chart", user)
 	}

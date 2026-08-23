@@ -34,6 +34,8 @@ func TestComplete(t *testing.T) {
 	var gotAuth string
 	var gotSystem string
 	var gotUser string
+	var gotTemp float64
+	var gotMax int
 
 	srv := mockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" {
@@ -50,6 +52,8 @@ func TestComplete(t *testing.T) {
 		gotModel = req.Model
 		gotSystem = req.Messages[0].Content
 		gotUser = req.Messages[1].Content
+		gotTemp = req.Temperature
+		gotMax = req.MaxTokens
 		w.Write([]byte(jsonBody(validChart)))
 	})
 
@@ -69,6 +73,12 @@ func TestComplete(t *testing.T) {
 	}
 	if gotSystem != "sys" || gotUser != "usr" {
 		t.Errorf("messages = %q / %q, want sys/usr", gotSystem, gotUser)
+	}
+	if gotTemp != 0 {
+		t.Errorf("temperature = %v, want 0 (deterministic formatting)", gotTemp)
+	}
+	if gotMax != 8192 {
+		t.Errorf("max_tokens = %d, want 8192", gotMax)
 	}
 }
 

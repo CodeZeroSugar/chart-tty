@@ -41,3 +41,6 @@ Agents: append new entries here when you hit a pitfall or make a non-obvious dec
 - AJSON responses in httptest mocks: never embed newlines in a raw JSON string literal — marshal a struct/map instead, or the decoder chokes.
 - Basic-mode mode detection: a chart with no `{`/`[` constructs but with chord-over-lyrics lines routes to `ModeBasic` via `LooksLikeBasicChart` (M7).
 - AI conversion is strictly opt-in: `--ai-convert` / `--write`, or the `c` TUI key. The validate-retry loop caps at 3 attempts and strips markdown code fences from model output.
+- Converter prompt accuracy levers (in order of impact): few-shot worked example covering observed failure modes, explicit messy-pattern transformation rules, `temperature: 0` (formatting tasks want determinism), generous `max_tokens` (truncated output fails validation and burns a multi-minute retry), retry prompts that include the rejected attempt alongside the validator error.
+- `--write` emits `<name>.pro` next to source — a `.pro` source gets overwritten in place. Copy to `/tmp` first when converting repo fixtures.
+- DeepSeek V4 flash via OpenCode Go converted a 131-line chart in ~5 minutes; budget timeouts accordingly when testing live conversions.

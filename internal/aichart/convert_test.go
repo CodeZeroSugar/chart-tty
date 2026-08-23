@@ -1,6 +1,7 @@
 package aichart
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -29,13 +30,18 @@ func TestConvertValidOnFirstAttempt(t *testing.T) {
 }
 
 func TestConvertInvalidThenValid(t *testing.T) {
-calls := 0
+	calls := 0
+	var retryUserPrompt string
 	srv := mockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		calls++
+		body, _ := io.ReadAll(r.Body)
+		var req chatRequest
+		json.Unmarshal(body, &req)
 		if calls == 1 {
 			w.Write([]byte(jsonBody("[not a valid] chart")))
 			return
 		}
+		retryUserPrompt = req.Messages[1].Content
 		w.Write([]byte(jsonBody(validChart)))
 	})
 	cl := Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
@@ -55,6 +61,11 @@ calls := 0
 	}
 	if calls != 2 {
 		t.Errorf("calls = %d, want 2", calls)
+	}
+	for _, want := range []string{"failed validation", "invalid bracket content", "[not a valid] chart", "messy input"} {
+		if !strings.Contains(retryUserPrompt, want) {
+			t.Errorf("retry prompt missing %q:\n%s", want, retryUserPrompt)
+		}
 	}
 }
 
