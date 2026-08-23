@@ -88,3 +88,120 @@ func TestDefaultPath(t *testing.T) {
 		t.Errorf("DefaultPath() = %q, want suffix chart-tty/config.toml", path)
 	}
 }
+
+func TestSetAPIKeyReplacesExisting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	content := "[ai]\nbase_url = \"http://x\"\napi_key = \"old-key\"\nmodel = \"m\"\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if err := SetAPIKey(path, "new-secret"); err != nil {
+		t.Fatalf("SetAPIKey() unexpected error: %v", err)
+	}
+	out, _ := os.ReadFile(path)
+	text := string(out)
+	if strings.Contains(text, "old-key") {
+		t.Errorf("file still contains old key:\n%s", text)
+	}
+	if !strings.Contains(text, `api_key = "new-secret"`) {
+		t.Errorf("file missing new key:\n%s", text)
+	}
+	for _, want := range []string{"base_url = \"http://x\"", "model = \"m\"", "[ai]"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("file lost %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestSetAPIKeyInsertsIntoExistingSection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	content := "# my config\n[theme]\nheader_color = \"red\"\n\n[ai]\n# comment inside ai\nmodel = \"m\""
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if err := SetAPIKey(path, "key-123"); err != nil {
+		t.Fatalf("SetAPIKey() unexpected error: %v", err)
+	}
+	out, _ := os.ReadFile(path)
+	text := string(out)
+
+	aiIdx := strings.Index(text, "[ai]")
+	keyIdx := strings.Index(text, `api_key = "key-123"`)
+	if aiIdx < 0 || keyIdx < 0 || keyIdx < aiIdx {
+		t.Fatalf("api_key not inside [ai] section:\n%s", text)
+	}
+	for _, want := range []string{"# my config", "header_color = \"red\"", "# comment inside ai", "model = \"m\""} {
+		if !strings.Contains(text, want) {
+			t.Errorf("file lost %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestSetAPIKeyAppendsMissingSection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	content := "[theme]\nheader_color = \"red\"\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if err := SetAPIKey(path, "key-456"); err != nil {
+		t.Fatalf("SetAPIKey() unexpected error: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() after set: %v", err)
+	}
+	if cfg.AI.APIKey != "key-456" {
+		t.Errorf("AI.APIKey = %q, want key-456", cfg.AI.APIKey)
+	}
+	if cfg.Theme.HeaderColor != "red" {
+		t.Errorf("HeaderColor = %q, want red (existing setting preserved)", cfg.Theme.HeaderColor)
+	}
+}
+
+func TestSetAPIKeyCreatesMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sub", "config.toml")
+	if err := SetAPIKey(path, "fresh-key"); err != nil {
+		t.Fatalf("SetAPIKey() unexpected error: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() after set: %v", err)
+	}
+	if cfg.AI.APIKey != "fresh-key" {
+		t.Errorf("AI.APIKey = %q, want fresh-key", cfg.AI.APIKey)
+	}
+	if cfg.Keys.Quit != "q" {
+		t.Errorf("Keys.Quit = %q, want template default q", cfg.Keys.Quit)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("file perms = %v, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestSetAPIKeyTrimsWhitespaceAndRejectsEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := SetAPIKey(path, "   "); err == nil {
+		t.Fatal("SetAPIKey(whitespace) expected error")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("file should not be created for empty key")
+	}
+
+	if err := SetAPIKey(path, "  padded-key  "); err != nil {
+		t.Fatalf("SetAPIKey(padded) unexpected error: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(): %v", err)
+	}
+	if cfg.AI.APIKey != "padded-key" {
+		t.Errorf("AI.APIKey = %q, want trimmed padded-key", cfg.AI.APIKey)
+	}
+}

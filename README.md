@@ -27,7 +27,10 @@ rendered chart as plain text instead.
 |------|-------------|
 | `--transpose N` | Transpose all chords by N semitones (negative for down) |
 | `--config PATH` | Config file path (default `~/.config/chart-tty/config.toml`) |
+| `--set-api-key KEY` | Store the AI API key in the config file (`-` reads it from stdin) |
 | `--no-color` | Disable colored output (also honors `NO_COLOR` env var) |
+| `--ai-convert` | Convert chart to compliant ChordPro via AI |
+| `--write` | Write converted chart to `<name>.pro` next to source (requires `--ai-convert`) |
 | `--version` | Print version and exit |
 | `-h`, `--help` | Show usage and exit |
 
@@ -117,6 +120,16 @@ keep charts on your machine; any other endpoint sends the chart text to that ser
 
 Endpoint, key, and model come from the `[ai]` config section or the env vars
 `CHART_TTY_BASE_URL`, `CHART_TTY_API_KEY`, `CHART_TTY_MODEL`.
+
+To store the key in your config file (comments and other settings are preserved):
+
+```sh
+chart-tty --set-api-key sk-...     # or: chart-tty --set-api-key -  (key read from stdin)
+```
+
+The config file is written with `0600` permissions since it holds a secret. Note that a
+set `CHART_TTY_API_KEY` env var takes precedence over the stored value, and passing the
+key as an argument leaves it in your shell history — prefer the stdin form for shared machines.
 
 ## Configuration
 

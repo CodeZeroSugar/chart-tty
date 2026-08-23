@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,7 @@ func main() {
 	versionFlag := flag.Bool("version", false, "print version and exit")
 	aiConvertFlag := flag.Bool("ai-convert", false, "convert chart to compliant ChordPro via AI")
 	writeFlag := flag.Bool("write", false, "write converted chart to <name>.pro next to source (requires --ai-convert)")
+	setKeyFlag := flag.String("set-api-key", "", "store AI API key in config ('-' reads the key from stdin)")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -41,6 +43,43 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: --write requires --ai-convert\n")
 		os.Exit(2)
 	}
+
+	cfgPath := *configFlag
+	if cfgPath == "" {
+		var err error
+		cfgPath, err = config.DefaultPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *setKeyFlag != "" {
+		key := *setKeyFlag
+		if key == "-" {
+			rd, rerr := io.ReadAll(os.Stdin)
+			if rerr != nil {
+				fmt.Fprintf(os.Stderr, "Error: reading key from stdin: %v\n", rerr)
+				os.Exit(1)
+			}
+			key = strings.TrimSpace(string(rd))
+		}
+		if strings.TrimSpace(key) == "" {
+			fmt.Fprintln(os.Stderr, "Error: api key must not be empty")
+			os.Exit(2)
+		}
+		if err := config.SetAPIKey(cfgPath, key); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		masked := key
+		if len(masked) > 4 {
+			masked = "****" + masked[len(masked)-4:]
+		}
+		fmt.Printf("API key saved (%s) to %s\n", masked, cfgPath)
+		os.Exit(0)
+	}
+
 	args := flag.Args()
 	if len(args) < 1 {
 		flag.Usage()
@@ -52,14 +91,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfgPath := *configFlag
-	if cfgPath == "" {
-		cfgPath, err = config.DefaultPath()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	}
 	appCfg, err := config.Load(cfgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

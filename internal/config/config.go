@@ -1,9 +1,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -71,4 +73,96 @@ func Load(path string) (Config, error) {
 		return cfg, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	return cfg, nil
+}
+
+const defaultTemplate = `# chart-tty configuration
+# All fields optional — unset fields fall back to these defaults.
+
+[theme]
+# lipgloss color names: red, green, yellow, blue, magenta, cyan, white, gray,
+# or ANSI numbers 0-255 ("196"), or hex "#ff8800"
+header_color = "cyan"    # section headers like [chorus]
+comment_color = "yellow" # {comment:} directive text
+
+[keys]
+# Single-key names as bubbletea reports them
+quit = "q"
+scroll_down = "j"
+scroll_up = "k"
+transpose_up = "+"
+transpose_down = "-"
+
+[ai]
+# OpenAI-compatible endpoint. Works with OpenAI, gateways, Ollama/LM Studio local models.
+base_url = "https://api.openai.com/v1"
+api_key = ""             # set via: chart-tty --set-api-key <key>
+model = "gpt-4o-mini"
+`
+
+// SetAPIKey stores the API key in the config file without disturbing the rest
+// of the file (comments and unrelated settings are preserved). Missing files
+// are created from the default template. The file is written with 0600
+// permissions since it holds a secret.
+func SetAPIKey(path, key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return errors.New("api key must not be empty")
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		out := strings.Replace(defaultTemplate, `api_key = ""`, fmt.Sprintf("api_key = %q", key), 1)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
+			return err
+		}
+		return verifyParses(path)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	out := make([]string, 0, len(lines)+3)
+	inAI := false
+	replaced := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") {
+			if inAI && !replaced {
+				out = append(out, fmt.Sprintf("api_key = %q", key))
+				replaced = true
+			}
+			inAI = trimmed == "[ai]"
+		} else if inAI && strings.HasPrefix(trimmed, "api_key") {
+			line = fmt.Sprintf("api_key = %q", key)
+			replaced = true
+		}
+		out = append(out, line)
+	}
+	if inAI && !replaced {
+		out = append(out, fmt.Sprintf("api_key = %q", key))
+		replaced = true
+	}
+	if !replaced {
+		out = append(out, "", "[ai]", fmt.Sprintf("api_key = %q", key))
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(out, "\n")), 0o600); err != nil {
+		return err
+	}
+	return verifyParses(path)
+}
+
+func verifyParses(path string) error {
+	if _, err := Load(path); err != nil {
+		return fmt.Errorf("config no longer parses after update: %w", err)
+	}
+	return nil
 }
