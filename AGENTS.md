@@ -26,12 +26,13 @@ cmd/chart-tty/main.go      CLI entrypoint: flags, file loading, mode detection, 
 internal/parser/           validation + parsing -> Document
   spec.go / spec.json      embedded ChordPro directive lists (meta / formatting / environment)
   validator.go             ValidateChart() + chordRegex (strict chord grammar)
-  helpers.go               extractDirective, parseEnvDirective, category lookup, tab detection
+  chord.go                 Chord model: ParseChord / Transpose / String; Document.Transpose
+  helpers.go               extractDirective, parseEnvDirective, category lookup, tab/chord-line detection
   document.go              Document / Section / ParsedLine / ChordToken model
   parser.go                Parse() -> parseChordPro() / parseBasic(); env + meta handlers
-internal/ui/               (to build) renderer + bubbletea TUI shell
-internal/config/           (to build) TOML config: theme, keybindings, AI settings
-internal/aichart/          (to build) LLM conversion pipeline -> Validator loop
+internal/ui/               render.go (headless Render + RenderConfig), app.go (bubbletea Model + keybinds)
+internal/config/           TOML config: theme colors, keybindings, AI settings
+internal/aichart/          LLM conversion pipeline (OpenAI-compatible client) -> Validator retry loop
 charts/                    local sample charts (gitignored, NOT committed) - smoke-test fixtures
 ```
 

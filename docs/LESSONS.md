@@ -33,3 +33,11 @@ Agents: append new entries here when you hit a pitfall or make a non-obvious dec
 - `{subtitle}`/`{st}` → Artist field (not a separate subtitle field).
 - Blank-line flush rule: outside env = flush; inside env = never; trailing section always flushed at end of parse (so bare lyrics and unclosed envs survive).
 - Chord grammar accepts `G6/9` (slash-number bass) but rejects `[----]`, `[N.C.]`, `[H]`, `[Coda]`, `[Gm*]` unless escaped as `[*...]`.
+- Comment-family directives (`{comment:}`/`{c:}`/`{comment_italic}`/`{ci}`/`{comment_box}`/`{cb}`) are emitted into the Document as `LineTypeComment` lines so the renderer can style them. `#` comment lines stay ignored in both modes.
+- Chord transpose mutates `Document` in place via `Document.Transpose(n)`; the `Key` field stays original and the UI computes the displayed key from a transpose counter, so re-keying doesn't corrupt metadata.
+- Renderer chord rows pad to the lyric width; chords past the lyric end keep their absolute column (the chord row simply extends longer).
+- TTY detection must use `golang.org/x/term` `IsTerminal` on stdin+stdout; `os.ModeCharDevice` is fooled by `/dev/null`.
+- lipgloss auto-disables ANSI when stdout isn't a TTY, so piped output is plain text — config colors only show in the TUI (or when forced).
+- AJSON responses in httptest mocks: never embed newlines in a raw JSON string literal — marshal a struct/map instead, or the decoder chokes.
+- Basic-mode mode detection: a chart with no `{`/`[` constructs but with chord-over-lyrics lines routes to `ModeBasic` via `LooksLikeBasicChart` (M7).
+- AI conversion is strictly opt-in: `--ai-convert` / `--write`, or the `c` TUI key. The validate-retry loop caps at 3 attempts and strips markdown code fences from model output.
