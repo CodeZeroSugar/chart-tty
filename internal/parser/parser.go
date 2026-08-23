@@ -80,6 +80,76 @@ func (p *Parser) parseChordPro(chart string) error {
 }
 
 func (p *Parser) parseBasic(chart string) error {
+	if len(chart) == 0 {
+		return errors.New("chart is empty, nothing to parse")
+	}
+	cleanChart := strings.ReplaceAll(chart, "\r\n", "\n")
+	lines := strings.Split(cleanChart, "\n")
+
+	type lineKind int
+	const (
+		kindBlank lineKind = iota
+		kindComment
+		kindTab
+		kindChord
+		kindLyric
+	)
+
+	class := make([]lineKind, len(lines))
+	for i, ln := range lines {
+		switch {
+		case strings.TrimSpace(ln) == "":
+			class[i] = kindBlank
+		case strings.HasPrefix(strings.TrimSpace(ln), "#"):
+			class[i] = kindComment
+		case isTabLine(strings.TrimSpace(ln)):
+			class[i] = kindTab
+		case isChordLine(ln):
+			class[i] = kindChord
+		default:
+			class[i] = kindLyric
+		}
+	}
+
+	for i := 0; i < len(lines); i++ {
+		switch class[i] {
+		case kindBlank:
+			p.flushSection()
+		case kindComment:
+		case kindTab:
+			p.appendLine(ParsedLine{
+				Type:   LineTypeTab,
+				Raw:    strings.TrimSpace(lines[i]),
+				Lyrics: "",
+				Chords: nil,
+			})
+		case kindChord:
+			if i+1 < len(lines) && class[i+1] == kindLyric {
+				p.appendLine(ParsedLine{
+					Type:   LineTypeChordAndLyric,
+					Raw:    lines[i+1],
+					Lyrics: lines[i+1],
+					Chords: extractBasicChords(lines[i]),
+				})
+				i++
+			} else {
+				p.appendLine(ParsedLine{
+					Type:   LineTypeChord,
+					Raw:    strings.TrimSpace(lines[i]),
+					Lyrics: "",
+					Chords: extractBasicChords(lines[i]),
+				})
+			}
+		case kindLyric:
+			p.appendLine(ParsedLine{
+				Type:   LineTypeLyric,
+				Raw:    lines[i],
+				Lyrics: lines[i],
+				Chords: nil,
+			})
+		}
+	}
+	p.flushSection()
 	return nil
 }
 

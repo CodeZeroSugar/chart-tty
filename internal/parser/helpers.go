@@ -63,6 +63,40 @@ func isTabLine(s string) bool {
 	return strings.Contains(s, "--") || (strings.Contains(s, "|") && strings.Contains(s, "-"))
 }
 
+func isChordLine(line string) bool {
+	l := strings.TrimSpace(line)
+	if l == "" {
+		return false
+	}
+	for _, tok := range strings.Fields(l) {
+		if !validateBracketContent(tok) {
+			return false
+		}
+	}
+	return true
+}
+
+func extractBasicChords(line string) []ChordToken {
+	var out []ChordToken
+	i := 0
+	for i < len(line) {
+		for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+			i++
+		}
+		if i >= len(line) {
+			break
+		}
+		start := i
+		for i < len(line) && line[i] != ' ' && line[i] != '\t' {
+			i++
+		}
+		if tok := line[start:i]; validateBracketContent(tok) {
+			out = append(out, ChordToken{Name: tok, Position: start})
+		}
+	}
+	return out
+}
+
 func DetectParserMode(valid bool, err error) ParserMode {
 	if valid && err == nil {
 		return ModeChordPro

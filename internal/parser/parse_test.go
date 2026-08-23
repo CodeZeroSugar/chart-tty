@@ -384,8 +384,14 @@ func TestParseBasicMode(t *testing.T) {
 	if doc.Metadata == nil {
 		t.Error("Metadata is nil, want initialized map")
 	}
-	if len(doc.Sections) != 0 {
-		t.Errorf("Sections = %#v, want empty", doc.Sections)
+	if len(doc.Sections) != 1 {
+		t.Fatalf("Sections = %#v, want 1 section", doc.Sections)
+	}
+	if len(doc.Sections[0].Lines) != 1 {
+		t.Fatalf("Lines = %#v, want 1 line", doc.Sections[0].Lines)
+	}
+	if got := doc.Sections[0].Lines[0]; got.Type != LineTypeLyric || got.Lyrics != "Swing low" {
+		t.Errorf("line = %#v, want Lyric line 'Swing low'", got)
 	}
 }
 
