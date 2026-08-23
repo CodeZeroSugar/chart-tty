@@ -65,7 +65,17 @@ func (p *Parser) parseChordPro(chart string) error {
 	for _, line := range parsedLines {
 		switch line.Type {
 		case LineTypeDirective:
-			p.handleDirective(extractDirective(line.Raw))
+			dir, data := extractDirective(line.Raw)
+			if isCommentDirective(dir) {
+				p.appendLine(ParsedLine{
+					Type:   LineTypeComment,
+					Raw:    line.Raw,
+					Lyrics: data,
+					Chords: nil,
+				})
+			} else {
+				p.handleDirective(dir, data)
+			}
 		case LineTypeEmpty:
 			if p.shouldFlushOnBlankLine() {
 				p.flushSection()

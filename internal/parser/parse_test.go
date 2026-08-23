@@ -324,7 +324,7 @@ func TestParseConsecutiveBlankLinesSingleFlush(t *testing.T) {
 	}
 }
 
-func TestParseIgnoresCommentsFormattingUnknown(t *testing.T) {
+func TestParseCommentsCaptured(t *testing.T) {
 	chart := `# a comment
 {comment: Chorus}
 {c: intro}
@@ -339,11 +339,30 @@ Swing [D]low
 	if doc.Title != "Swing Low" {
 		t.Errorf("Title = %q, want %q", doc.Title, "Swing Low")
 	}
-	if len(doc.Sections) != 1 {
-		t.Fatalf("Sections = %#v, want 1 section", doc.Sections)
+	if len(doc.Sections) != 2 {
+		t.Fatalf("Sections = %#v, want 2 sections", doc.Sections)
 	}
-	if len(doc.Sections[0].Lines) != 1 {
-		t.Errorf("Lines = %#v, want 1 line (comments/formatting/unknown not appended)", doc.Sections[0].Lines)
+
+	first := doc.Sections[0]
+	if first.Name != "" {
+		t.Errorf("first section Name = %q, want empty", first.Name)
+	}
+	if len(first.Lines) != 2 {
+		t.Fatalf("first section Lines = %#v, want 2 comment lines", first.Lines)
+	}
+	for i, want := range []string{"Chorus", "intro"} {
+		ln := first.Lines[i]
+		if ln.Type != LineTypeComment || ln.Lyrics != want {
+			t.Errorf("first.Lines[%d] = %#v, want comment line %q", i, ln, want)
+		}
+	}
+
+	second := doc.Sections[1]
+	if second.Name != "chorus" {
+		t.Errorf("second section Name = %q, want %q", second.Name, "chorus")
+	}
+	if len(second.Lines) != 1 {
+		t.Errorf("second section Lines = %#v, want 1 line", second.Lines)
 	}
 }
 
@@ -429,6 +448,16 @@ Comin' for to carry me [A7]home.
 						Raw:    "Comin' for to carry me [A7]home.",
 						Lyrics: "Comin' for to carry me home.",
 						Chords: []ChordToken{{Name: "A7", Position: 23}},
+					},
+				},
+			},
+			{
+				Name: "",
+				Lines: []ParsedLine{
+					{
+						Type:   LineTypeComment,
+						Raw:    "{comment: Chorus}",
+						Lyrics: "Chorus",
 					},
 				},
 			},

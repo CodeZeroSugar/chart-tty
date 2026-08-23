@@ -130,6 +130,14 @@ func getDirectiveCategory(directive string) DirectiveCategory {
 	return CategoryUnknown
 }
 
+func isCommentDirective(directive string) bool {
+	switch strings.ToLower(directive) {
+	case "comment", "c", "comment_italic", "ci", "comment_box", "cb":
+		return true
+	}
+	return false
+}
+
 func parseEnvDirective(directive string) (actionType string, envName string, ok bool) {
 	d := strings.ToLower(strings.TrimSpace(directive))
 
