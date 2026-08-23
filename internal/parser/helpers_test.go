@@ -259,3 +259,27 @@ func TestDetectParserMode(t *testing.T) {
 		})
 	}
 }
+
+func TestLooksLikeBasicChart(t *testing.T) {
+	tests := []struct {
+		name  string
+		chart string
+		want  bool
+	}{
+		{"chord over lyrics", "C  G\nSwing low, sweet chariot", true},
+		{"basic with comment", "# intro\nC G\nSwing low", true},
+		{"basic single chord line", "Am7", true},
+		{"chordpro inline brackets", "{soc}\nSwing [D]low\n{eoc}", false},
+		{"chordpro directive and chords", "{title: X}\n[G] home", false},
+		{"bare lyrics no chords", "Swing low, sweet chariot", false},
+		{"empty", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := LooksLikeBasicChart(tt.chart); got != tt.want {
+				t.Errorf("LooksLikeBasicChart(%q) = %v, want %v", tt.chart, got, tt.want)
+			}
+		})
+	}
+}

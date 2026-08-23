@@ -104,6 +104,20 @@ func DetectParserMode(valid bool, err error) ParserMode {
 	return ModeBasic
 }
 
+func LooksLikeBasicChart(chart string) bool {
+	sawChordLine := false
+	for _, line := range strings.Split(chart, "\n") {
+		l := strings.TrimSpace(line)
+		if strings.Contains(l, "{") || strings.Contains(l, "[") {
+			return false
+		}
+		if isChordLine(l) {
+			sawChordLine = true
+		}
+	}
+	return sawChordLine
+}
+
 func extractDirective(directiveLine string) (directive string, data string) {
 	inner := directiveLine[1 : len(directiveLine)-1]
 	inner = strings.TrimSpace(inner)

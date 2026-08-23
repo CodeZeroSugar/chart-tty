@@ -23,7 +23,9 @@ Agents: append new entries here when you hit a pitfall or make a non-obvious dec
 - `spec.json` has no `define` directive; `{define: ...}` charts fail validation by design.
 - Hardcoded `ExampleFile` const in `cmd/chart-tty/main.go` is dead cruft, to be removed during CLI polish (M7).
 - `charts/` is gitignored — fixtures are local, never commit them. `output.txt` is also gitignored.
-- `ValidateChart` passes bracketless/braiceless charts vacuously, so a basic (chord-over-lyrics) chart is indistinguishable from bare-lyrics ChordPro to the validator. `main.go`'s mode detection therefore routes basic charts to ChordPro mode. Fix = a detection heuristic, deferred to M7.
+- `ValidateChart` passes bracketless/braiceless charts vacuously. Fixed in M7: `LooksLikeBasicChart` (chord-over-lyrics lines with no `{`/`[`) routes such charts to basic mode in `main.go`.
+- Detecting an interactive terminal: use `golang.org/x/term`'s `IsTerminal` on both stdin and stdout — `os.ModeCharDevice` is fooled by `/dev/null` (it's a char device), which wrongly triggers TUI mode and errors out.
+- lipgloss auto-disables ANSI when stdout isn't a TTY — piped output is plain text; `--no-color` forces this off in the TUI too.
 
 ## Decisions worth remembering
 
