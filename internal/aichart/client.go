@@ -40,10 +40,11 @@ func FromConfig(c config.Config) Client {
 }
 
 type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	Temperature float64       `json:"temperature"`
-	MaxTokens   int           `json:"max_tokens"`
+	Model    string        `json:"model"`
+	Messages []chatMessage `json:"messages"`
+	// NOTE: intentionally no temperature/max_tokens fields. The OpenCode Go
+	// gateway hangs (>9 min, zero bytes) on requests carrying them; without
+	// them the same request completes in ~2 minutes. See docs/LESSONS.md.
 }
 
 type chatMessage struct {
@@ -61,10 +62,8 @@ type chatResponse struct {
 
 func (c Client) Complete(system, user string) (string, error) {
 	reqBody, err := json.Marshal(chatRequest{
-		Model:       c.Model,
-		Messages:    []chatMessage{{Role: "system", Content: system}, {Role: "user", Content: user}},
-		Temperature: 0,
-		MaxTokens:   8192,
+		Model:    c.Model,
+		Messages: []chatMessage{{Role: "system", Content: system}, {Role: "user", Content: user}},
 	})
 	if err != nil {
 		return "", fmt.Errorf("building request: %w", err)
