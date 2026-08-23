@@ -12,20 +12,26 @@ import (
 )
 
 type Model struct {
-	lines     []string
-	doc       *parser.Document
-	transpose int
-	offset    int
-	width     int
-	height    int
-	title     string
-	cfg       RenderConfig
-	keys      config.KeyConfig
-	quitting  bool
-	showHelp  bool
-	rawChart  string
-	converter *aichart.Client
-	message   string
+	lines      []string
+	doc        *parser.Document
+	transpose  int
+	offset     int
+	width      int
+	height     int
+	title      string
+	cfg        RenderConfig
+	keys       config.KeyConfig
+	quitting   bool
+	showHelp   bool
+	rawChart   string
+	converter  *aichart.Client
+	message    string
+	converting bool
+}
+
+type convertDoneMsg struct {
+	result aichart.Result
+	err    error
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
@@ -77,7 +83,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-case tea.KeyMsg:
+	case convertDoneMsg:
+		m = m.applyConversion(msg.result, msg.err)
+	case tea.KeyMsg:
 		k := msg.String()
 		switch {
 		case k == "ctrl+c":
@@ -111,7 +119,8 @@ case tea.KeyMsg:
 		case k == "end" || k == "G":
 			m.offset = len(m.lines)
 		case k == "c":
-			m.convert()
+			nm, cmd := m.startConversion()
+			return nm, cmd
 		}
 	}
 	m.clampOffset()
@@ -174,25 +183,38 @@ func (m Model) currentKey() string {
 	return c.Transpose(m.transpose).String()
 }
 
-func (m *Model) convert() {
-	if m.converter == nil || m.rawChart == "" {
-		return
+func (m Model) startConversion() (Model, tea.Cmd) {
+	if m.converter == nil || m.rawChart == "" || m.converting {
+		return m, nil
 	}
-	res, err := m.converter.Convert(m.rawChart)
-	if err != nil {
+	m.converting = true
+	m.message = "converting…"
+	client := m.converter
+	raw := m.rawChart
+	return m, func() tea.Msg {
+		res, err := client.Convert(raw)
+		return convertDoneMsg{result: res, err: err}
+	}
+}
+
+func (m Model) applyConversion(res aichart.Result, cerr error) Model {
+	m.converting = false
+	if cerr != nil {
 		m.message = "AI conversion failed"
-		return
+		return m
 	}
 	nd, err := parser.NewParser(parser.ModeChordPro).Parse(res.Chart)
 	if err != nil {
 		m.message = "converted chart failed to parse"
-		return
+		return m
 	}
 	m.doc = nd
 	m.title = nd.Title
 	m.transpose = 0
 	m.lines = Render(nd, m.cfg)
+	m.offset = 0
 	m.message = "converted"
+	return m
 }
 
 func (m Model) Quitting() bool { return m.quitting }

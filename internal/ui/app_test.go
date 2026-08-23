@@ -275,20 +275,76 @@ func TestModelConvertKey(t *testing.T) {
 		},
 	}
 	m := update(t, NewDocModel(doc, RenderConfig{}).SetConverter("C G", client), tea.WindowSizeMsg{Width: 40, Height: 10})
-	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 
-	if !strings.Contains(m.View(), "Converted Song") {
-		t.Errorf("view %q does not show converted title", m.View())
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	m2, ok := nm.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T, want Model", nm)
 	}
-	if !strings.Contains(m.View(), "converted") {
-		t.Errorf("view %q does not show conversion message", m.View())
+	if cmd == nil {
+		t.Fatal("pressing c with a converter must return a cmd")
+	}
+	if !m2.converting {
+		t.Error("model not marked converting during conversion")
+	}
+	if !strings.Contains(m2.View(), "converting") {
+		t.Errorf("view %q does not show converting state", m2.View())
+	}
+
+	done := cmd()
+	cdm, ok := done.(convertDoneMsg)
+	if !ok {
+		t.Fatalf("cmd produced %T, want convertDoneMsg", done)
+	}
+
+	m3 := update(t, m2, cdm)
+	if m3.converting {
+		t.Error("still converting after convertDoneMsg")
+	}
+	view := m3.View()
+	if !strings.Contains(view, "Converted Song") {
+		t.Errorf("view %q does not show converted title", view)
+	}
+	if !strings.Contains(view, "converted") && !strings.Contains(view, "converting") {
+		t.Errorf("view %q lost conversion message", view)
+	}
+	if strings.Contains(view, "converting…") {
+		t.Errorf("view %q still shows converting after completion", view)
+	}
+}
+
+func TestModelConvertNoDoubleStart(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(srv.Close)
+	client := &aichart.Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
+
+	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
+	m := NewDocModel(doc, RenderConfig{}).SetConverter("raw", client)
+
+	m2, cmd := m.startConversion()
+	if cmd == nil || !m2.converting {
+		t.Fatal("first startConversion should begin conversion")
+	}
+	m3, cmd2 := m2.startConversion()
+	if cmd2 != nil {
+		t.Error("second startConversion while converting must be a no-op")
+	}
+	if !m3.converting {
+		t.Error("converting state lost on double press")
 	}
 }
 
 func TestModelConvertWithoutConverterNoop(t *testing.T) {
 	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
-	m := update(t, NewDocModel(doc, RenderConfig{}), tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-	if strings.Contains(m.View(), "converted") {
-		t.Errorf("view %q should not mention conversion without a converter", m.View())
+	nm, cmd := NewDocModel(doc, RenderConfig{}).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	m, ok := nm.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T, want Model", nm)
+	}
+	if cmd != nil {
+		t.Error("c without converter must not return a cmd")
+	}
+	if strings.Contains(m.View(), "converting") {
+		t.Errorf("view %q should not mention converting without a converter", m.View())
 	}
 }

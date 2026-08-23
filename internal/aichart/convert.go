@@ -14,28 +14,49 @@ type Result struct {
 	Errors   []string
 }
 
+type ProgressEvent struct {
+	Attempt     int
+	MaxAttempts int
+	Message     string
+}
+
 func (c Client) Convert(chart string) (Result, error) {
+	return c.ConvertProgress(chart, nil)
+}
+
+func (c Client) ConvertProgress(chart string, onEvent func(ProgressEvent)) (Result, error) {
+	emit := func(attempt int, msg string) {
+		if onEvent != nil {
+			onEvent(ProgressEvent{Attempt: attempt, MaxAttempts: MaxAttempts, Message: msg})
+		}
+	}
+
 	res := Result{}
 	system, _ := BuildPrompt(chart)
 	user := chart
 
 	for attempt := 1; attempt <= MaxAttempts; attempt++ {
+		emit(attempt, "contacting model")
 		out, err := c.Complete(system, user)
 		if err != nil {
 			res.Errors = append(res.Errors, err.Error())
 			res.Attempts = attempt
+			emit(attempt, fmt.Sprintf("model request failed: %v", err))
 			continue
 		}
 		cleaned := StripCodeFences(out)
 
+		emit(attempt, "validating output")
 		valid, verr := validate(cleaned)
 		if valid {
 			res.Chart = cleaned
 			res.Attempts = attempt
+			emit(attempt, "chart validated")
 			return res, nil
 		}
 		res.Errors = append(res.Errors, verr.Error())
 		res.Attempts = attempt
+		emit(attempt, fmt.Sprintf("invalid output, retrying: %v", verr))
 		user = fmt.Sprintf("%s\n\nThe previous attempt failed validation with error: %v\nHere is the previous attempt; fix these problems and return the complete corrected chart:\n%s", chart, verr.Error(), cleaned)
 	}
 

@@ -105,3 +105,64 @@ func TestConvertFencedValid(t *testing.T) {
 		t.Errorf("Chart = %q, want %q (fences stripped)", res.Chart, validChart)
 	}
 }
+
+func TestConvertProgressEvents(t *testing.T) {
+	calls := 0
+	srv := mockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.Write([]byte(jsonBody("[not a valid] chart")))
+			return
+		}
+		w.Write([]byte(jsonBody(validChart)))
+	})
+	cl := Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
+
+	var events []ProgressEvent
+	res, err := cl.ConvertProgress("messy input", func(e ProgressEvent) {
+		events = append(events, e)
+	})
+	if err != nil {
+		t.Fatalf("ConvertProgress() unexpected error: %v", err)
+	}
+	if res.Attempts != 2 || res.Chart != validChart {
+		t.Fatalf("result = %#v, want 2 attempts with valid chart", res)
+	}
+
+	if len(events) < 4 {
+		t.Fatalf("events = %#v, want at least 4", events)
+	}
+	first, last := events[0], events[len(events)-1]
+	if first.Attempt != 1 || first.Message != "contacting model" {
+		t.Errorf("first event = %#v, want attempt 1 contacting model", first)
+	}
+	if last.Attempt != 2 || last.Message != "chart validated" {
+		t.Errorf("last event = %#v, want attempt 2 chart validated", last)
+	}
+	retried := false
+	for _, e := range events {
+		if e.MaxAttempts != MaxAttempts {
+			t.Errorf("event %#v has wrong MaxAttempts", e)
+		}
+		if strings.Contains(e.Message, "invalid output, retrying") {
+			retried = true
+		}
+	}
+	if !retried {
+		t.Errorf("no retry event in %#v", events)
+	}
+}
+
+func TestConvertNilCallbackStillWorks(t *testing.T) {
+	srv := mockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(jsonBody(validChart)))
+	})
+	cl := Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
+	res, err := cl.ConvertProgress("messy", nil)
+	if err != nil {
+		t.Fatalf("ConvertProgress(nil) unexpected error: %v", err)
+	}
+	if res.Chart != validChart {
+		t.Errorf("Chart = %q, want %q", res.Chart, validChart)
+	}
+}

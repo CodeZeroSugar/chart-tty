@@ -109,11 +109,16 @@ func main() {
 	if *aiConvertFlag {
 		cl := aichart.FromConfig(appCfg)
 		converter = &cl
-		res, cerr := cl.Convert(chart)
+		status := newStatusLine("sending chart to " + cl.Model)
+		res, cerr := cl.ConvertProgress(chart, func(e aichart.ProgressEvent) {
+			status.update(e.Message)
+		})
 		if cerr != nil {
+			status.finish("conversion failed")
 			fmt.Fprintf(os.Stderr, "Error: AI conversion failed: %v\n", cerr)
 			os.Exit(1)
 		}
+		status.finish(fmt.Sprintf("converted after %d attempt(s)", res.Attempts))
 		if *writeFlag {
 			ext := filepath.Ext(absPath)
 			outPath := strings.TrimSuffix(absPath, ext) + ".pro"
