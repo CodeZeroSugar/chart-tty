@@ -40,8 +40,9 @@ rendered chart as plain text instead.
 | `PgUp` / `PgDn` / space | Page scroll |
 | `g` / `G` or home / end | Jump to top / bottom |
 | `+` / `-` | Transpose up / down |
+| `c` | Convert the loaded chart to ChordPro via AI |
 
-Keys are remappable via config.
+Keys are remappable via config; `c` is not.
 
 ## Chart formats
 
@@ -95,6 +96,27 @@ Comin' for to carry me home
 
 Line pairs are recognized automatically. Blank lines separate stanzas, and `#` lines are
 treated as comments (not rendered).
+
+## AI conversion
+
+Messy, non-compliant chord charts can be reformatted into fully compliant ChordPro using an
+LLM endpoint (OpenAI-compatible API — works with OpenAI, compatible gateways, and local models
+like Ollama / LM Studio).
+
+```sh
+chart-tty --ai-convert <messy-chart.txt>          # convert, then view/print
+chart-tty --ai-convert --write <messy-chart.txt>  # also write <name>.pro next to source
+```
+
+The converter sends your chart plus a ChordPro rules summary to the model, validates the output
+with the built-in validator, and retries (up to 3 attempts) feeding validation errors back.
+
+**Privacy:** conversion is strictly opt-in — charts are never sent automatically. Only
+`--ai-convert` or the `c` key in the TUI triggers a request. Local endpoints (Ollama/LM Studio)
+keep charts on your machine; any other endpoint sends the chart text to that server.
+
+Endpoint, key, and model come from the `[ai]` config section or the env vars
+`CHART_TTY_BASE_URL`, `CHART_TTY_API_KEY`, `CHART_TTY_MODEL`.
 
 ## Configuration
 

@@ -1,12 +1,16 @@
 package ui
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
@@ -244,5 +248,47 @@ func TestModelCustomKeys(t *testing.T) {
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
 	if !m.Quitting() {
 		t.Error("custom quit key x did not quit")
+	}
+}
+
+func TestModelConvertKey(t *testing.T) {
+	converted := "{title: Converted Song}\n{start_of_chorus}\nSwing [D]low\n{eoc}"
+	resp, _ := json.Marshal(map[string]any{
+		"choices": []map[string]any{{"message": map[string]any{"content": converted}}},
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(resp)
+	}))
+	t.Cleanup(srv.Close)
+	client := &aichart.Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
+
+	doc := &parser.Document{
+		Title:    "Original",
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{
+			{
+				Name: "",
+				Lines: []parser.ParsedLine{
+					{Type: parser.LineTypeLyric, Raw: "C G", Lyrics: "C G"},
+				},
+			},
+		},
+	}
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetConverter("C G", client), tea.WindowSizeMsg{Width: 40, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+
+	if !strings.Contains(m.View(), "Converted Song") {
+		t.Errorf("view %q does not show converted title", m.View())
+	}
+	if !strings.Contains(m.View(), "converted") {
+		t.Errorf("view %q does not show conversion message", m.View())
+	}
+}
+
+func TestModelConvertWithoutConverterNoop(t *testing.T) {
+	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
+	m := update(t, NewDocModel(doc, RenderConfig{}), tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if strings.Contains(m.View(), "converted") {
+		t.Errorf("view %q should not mention conversion without a converter", m.View())
 	}
 }

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/term"
 
+	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 	"github.com/CodeZeroSugar/chart-tty/internal/ui"
@@ -26,12 +28,18 @@ func main() {
 	configFlag := flag.String("config", "", "path to config file (default: ~/.config/chart-tty/config.toml)")
 	noColorFlag := flag.Bool("no-color", false, "disable colored output")
 	versionFlag := flag.Bool("version", false, "print version and exit")
+	aiConvertFlag := flag.Bool("ai-convert", false, "convert chart to compliant ChordPro via AI")
+	writeFlag := flag.Bool("write", false, "write converted chart to <name>.pro next to source (requires --ai-convert)")
 	flag.Usage = usage
 	flag.Parse()
 
 	if *versionFlag {
 		fmt.Printf("chart-tty %s\n", version)
 		os.Exit(0)
+	}
+	if *writeFlag && !*aiConvertFlag {
+		fmt.Fprintf(os.Stderr, "Error: --write requires --ai-convert\n")
+		os.Exit(2)
 	}
 	args := flag.Args()
 	if len(args) < 1 {
@@ -64,6 +72,28 @@ func main() {
 		os.Exit(1)
 	}
 	chart := string(bytes)
+	originalChart := chart
+
+	var converter *aichart.Client
+	if *aiConvertFlag {
+		cl := aichart.FromConfig(appCfg)
+		converter = &cl
+		res, cerr := cl.Convert(chart)
+		if cerr != nil {
+			fmt.Fprintf(os.Stderr, "Error: AI conversion failed: %v\n", cerr)
+			os.Exit(1)
+		}
+		if *writeFlag {
+			ext := filepath.Ext(absPath)
+			outPath := strings.TrimSuffix(absPath, ext) + ".pro"
+			if err := os.WriteFile(outPath, []byte(res.Chart), 0o644); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: writing converted chart: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "Wrote converted chart to %s\n", outPath)
+		}
+		chart = res.Chart
+	}
 
 	validator, err := parser.NewValidator()
 	if err != nil {
@@ -73,7 +103,7 @@ func main() {
 	isValid, verr := validator.ValidateChart(chart)
 
 	mode := parser.ModeChordPro
-	if !isValid || parser.LooksLikeBasicChart(chart) {
+	if (!isValid || parser.LooksLikeBasicChart(chart)) && !*aiConvertFlag {
 		if !isValid {
 			fmt.Fprintf(os.Stderr, "Warning: chart is not valid ChordPro (%v); falling back to basic mode\n", verr)
 		}
@@ -94,6 +124,9 @@ func main() {
 	isTTY := term.IsTerminal(int(os.Stdout.Fd())) && term.IsTerminal(int(os.Stdin.Fd()))
 	if isTTY {
 		m := ui.NewDocModel(doc, rcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys)
+		if converter != nil {
+			m = m.SetConverter(originalChart, converter)
+		}
 		if err := ui.RunModel(m); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: TUI failed: %v\n", err)
 			os.Exit(1)

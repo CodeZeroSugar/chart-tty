@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
@@ -22,6 +23,9 @@ type Model struct {
 	keys      config.KeyConfig
 	quitting  bool
 	showHelp  bool
+	rawChart  string
+	converter *aichart.Client
+	message   string
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
@@ -37,6 +41,12 @@ func NewDocModel(doc *parser.Document, cfg RenderConfig) Model {
 
 func (m Model) SetKeys(keys config.KeyConfig) Model {
 	m.keys = keys
+	return m
+}
+
+func (m Model) SetConverter(rawChart string, client *aichart.Client) Model {
+	m.rawChart = rawChart
+	m.converter = client
 	return m
 }
 
@@ -100,6 +110,8 @@ case tea.KeyMsg:
 			m.offset = 0
 		case k == "end" || k == "G":
 			m.offset = len(m.lines)
+		case k == "c":
+			m.convert()
 		}
 	}
 	m.clampOffset()
@@ -129,6 +141,10 @@ func (m Model) View() string {
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render(title))
 		sb.WriteString("\n")
 	}
+	if m.message != "" {
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render(m.message))
+		sb.WriteString("\n")
+	}
 	top := m.offset
 	bottom := m.offset + m.height
 	if bottom > len(m.lines) {
@@ -142,7 +158,7 @@ func (m Model) View() string {
 	}
 	if m.showHelp {
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · +/- transpose · q quit"))
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · +/- transpose · c convert · q quit"))
 	}
 	return sb.String()
 }
@@ -156,6 +172,27 @@ func (m Model) currentKey() string {
 		return m.doc.Key
 	}
 	return c.Transpose(m.transpose).String()
+}
+
+func (m *Model) convert() {
+	if m.converter == nil || m.rawChart == "" {
+		return
+	}
+	res, err := m.converter.Convert(m.rawChart)
+	if err != nil {
+		m.message = "AI conversion failed"
+		return
+	}
+	nd, err := parser.NewParser(parser.ModeChordPro).Parse(res.Chart)
+	if err != nil {
+		m.message = "converted chart failed to parse"
+		return
+	}
+	m.doc = nd
+	m.title = nd.Title
+	m.transpose = 0
+	m.lines = Render(nd, m.cfg)
+	m.message = "converted"
 }
 
 func (m Model) Quitting() bool { return m.quitting }
