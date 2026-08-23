@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
 
@@ -220,5 +221,28 @@ func TestModelTransposeNoDocIsNoop(t *testing.T) {
 	}
 	if got := m.View(); strings.Contains(got, "line1") {
 		t.Errorf("view %q unchanged lines expected", got)
+	}
+}
+
+func TestModelCustomKeys(t *testing.T) {
+	keys := config.Default().Keys
+	keys.Quit = "x"
+	keys.ScrollDown = "s"
+
+	m := update(t, NewModel(testLines(10), RenderConfig{}).SetKeys(keys), tea.WindowSizeMsg{Width: 20, Height: 4})
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if got := m.Offset(); got != 1 {
+		t.Errorf("custom scroll-down offset = %d, want 1", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if m.Quitting() {
+		t.Error("default quit key q should not quit after remap")
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	if !m.Quitting() {
+		t.Error("custom quit key x did not quit")
 	}
 }

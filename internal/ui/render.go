@@ -3,12 +3,22 @@ package ui
 import (
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
 
 type RenderConfig struct {
-	HeaderStyle  string
-	CommentStyle string
+	HeaderStyle  lipgloss.Style
+	CommentStyle lipgloss.Style
+}
+
+func RenderConfigFromConfig(cfg config.Config) RenderConfig {
+	return RenderConfig{
+		HeaderStyle:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HeaderColor)),
+		CommentStyle: lipgloss.NewStyle().Foreground(lipgloss.Color(cfg.Theme.CommentColor)),
+	}
 }
 
 func Render(doc *parser.Document, cfg RenderConfig) []string {
@@ -60,9 +70,6 @@ func chordNames(chords []parser.ChordToken) string {
 	return strings.Join(names, " ")
 }
 
-func applyStyle(s, style string) string {
-	if style == "" {
-		return s
-	}
-	return style + s + "\x1b[0m"
+func applyStyle(s string, st lipgloss.Style) string {
+	return st.Render(s)
 }

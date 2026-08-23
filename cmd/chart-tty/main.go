@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 	"github.com/CodeZeroSugar/chart-tty/internal/ui"
 )
 
 func main() {
 	transposeFlag := flag.Int("transpose", 0, "transpose chords by N semitones")
+	configFlag := flag.String("config", "", "path to config file (default: ~/.config/chart-tty/config.toml)")
 	flag.Parse()
 	args := flag.Args()
 	if len(args) < 1 {
@@ -21,6 +23,20 @@ func main() {
 	absPath, err := filepath.Abs(args[0])
 	if err != nil {
 		fmt.Println("Failed to resolve path: ", args[0])
+		os.Exit(1)
+	}
+
+	cfgPath := *configFlag
+	if cfgPath == "" {
+		cfgPath, err = config.DefaultPath()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	appCfg, err := config.Load(cfgPath)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -48,10 +64,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg := ui.RenderConfig{}
+	rcfg := ui.RenderConfigFromConfig(appCfg)
 	fi, _ := os.Stdout.Stat()
 	if (fi.Mode() & os.ModeCharDevice) != 0 {
-		m := ui.NewDocModel(doc, cfg).SetTranspose(*transposeFlag)
+		m := ui.NewDocModel(doc, rcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys)
 		if err := ui.RunModel(m); err != nil {
 			fmt.Printf("Error: TUI failed: %v\n", err)
 			os.Exit(1)
@@ -59,7 +75,7 @@ func main() {
 		return
 	}
 	doc.Transpose(*transposeFlag)
-	for _, line := range ui.Render(doc, cfg) {
+	for _, line := range ui.Render(doc, rcfg) {
 		fmt.Println(line)
 	}
 }

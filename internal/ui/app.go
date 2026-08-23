@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
 
@@ -18,18 +19,24 @@ type Model struct {
 	height    int
 	title     string
 	cfg       RenderConfig
+	keys      config.KeyConfig
 	quitting  bool
 	showHelp  bool
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
-	return Model{lines: lines, cfg: cfg, showHelp: true}
+	return Model{lines: lines, cfg: cfg, keys: config.Default().Keys, showHelp: true}
 }
 
 func NewDocModel(doc *parser.Document, cfg RenderConfig) Model {
 	m := NewModel(Render(doc, cfg), cfg)
 	m.doc = doc
 	m.title = doc.Title
+	return m
+}
+
+func (m Model) SetKeys(keys config.KeyConfig) Model {
+	m.keys = keys
 	return m
 }
 
@@ -60,35 +67,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
+case tea.KeyMsg:
+		k := msg.String()
+		switch {
+		case k == "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
-		case "up", "k":
+		case k == m.keys.Quit:
+			m.quitting = true
+			return m, tea.Quit
+		case k == m.keys.ScrollUp || k == "up":
 			m.offset--
-		case "down", "j":
+		case k == m.keys.ScrollDown || k == "down":
 			m.offset++
-		case "pgup":
-			m.offset -= max(m.height, 1)
-		case "pgdown", " ":
-			m.offset += max(m.height, 1)
-		case "home", "g":
-			m.offset = 0
-		case "end", "G":
-			m.offset = len(m.lines)
-		case "+", "=":
+		case k == m.keys.TransposeUp:
 			if m.doc != nil {
 				m.doc.Transpose(1)
 				m.transpose++
 				m.lines = Render(m.doc, m.cfg)
 			}
-		case "-", "_":
+		case k == m.keys.TransposeDown:
 			if m.doc != nil {
 				m.doc.Transpose(-1)
 				m.transpose--
 				m.lines = Render(m.doc, m.cfg)
 			}
+		case k == "pgup":
+			m.offset -= max(m.height, 1)
+		case k == "pgdown" || k == " ":
+			m.offset += max(m.height, 1)
+		case k == "home" || k == "g":
+			m.offset = 0
+		case k == "end" || k == "G":
+			m.offset = len(m.lines)
 		}
 	}
 	m.clampOffset()

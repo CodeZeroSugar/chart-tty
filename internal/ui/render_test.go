@@ -4,6 +4,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
 
@@ -106,8 +109,14 @@ func TestRenderStyles(t *testing.T) {
 		},
 	}
 
-	cfg := RenderConfig{HeaderStyle: "\x1b[1m", CommentStyle: "\x1b[3m"}
-	want := []string{"\x1b[1m[chorus]\x1b[0m", "\x1b[3mSolo\x1b[0m"}
+	cfg := RenderConfig{
+		HeaderStyle:  lipgloss.NewStyle().Bold(true),
+		CommentStyle: lipgloss.NewStyle().Italic(true),
+	}
+	want := []string{
+		lipgloss.NewStyle().Bold(true).Render("[chorus]"),
+		lipgloss.NewStyle().Italic(true).Render("Solo"),
+	}
 
 	got := Render(doc, cfg)
 	if !reflect.DeepEqual(got, want) {
@@ -119,6 +128,32 @@ func TestRenderEmptyDocument(t *testing.T) {
 	doc := &parser.Document{Metadata: map[string][]string{}}
 	if got := Render(doc, RenderConfig{}); len(got) != 0 {
 		t.Errorf("Render() = %#v, want empty", got)
+	}
+}
+
+func TestRenderConfigFromConfig(t *testing.T) {
+	cfg := config.Default()
+	cfg.Theme.HeaderColor = "magenta"
+	rcfg := RenderConfigFromConfig(cfg)
+
+	doc := &parser.Document{
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{
+			{
+				Name: "verse",
+				Lines: []parser.ParsedLine{
+					{Type: parser.LineTypeComment, Raw: "{c: hi}", Lyrics: "hi"},
+				},
+			},
+		},
+	}
+	got := Render(doc, rcfg)
+	want := []string{
+		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("magenta")).Render("[verse]"),
+		lipgloss.NewStyle().Foreground(lipgloss.Color("yellow")).Render("hi"),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Render() = %#v, want %#v", got, want)
 	}
 }
 
