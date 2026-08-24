@@ -1,9 +1,35 @@
 package parser
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 )
+
+// minTabStringLines is how many string-note lines a {sot} block must contain
+// before it counts as real tablature.
+const minTabStringLines = 4
+
+var stringNoteLine = regexp.MustCompile(`^[A-Ga-g][ \t]*\|`)
+
+// isStringNoteLine reports whether a line leads with a musical letter and a
+// pipe, e.g. "E|------". The pipe is mandatory; dash count is irrelevant.
+func isStringNoteLine(line string) bool {
+	return stringNoteLine.MatchString(strings.TrimSpace(line))
+}
+
+// isRealTabBlock reports whether the raw lines of a {sot} block contain at
+// least minTabStringLines string-note lines. Blocks that fail are decorative
+// line breaks pretending to be tabs.
+func isRealTabBlock(lines []string) bool {
+	count := 0
+	for _, l := range lines {
+		if isStringNoteLine(l) {
+			count++
+		}
+	}
+	return count >= minTabStringLines
+}
 
 func bracketsBalanced(l string) bool {
 	inBrackets := false

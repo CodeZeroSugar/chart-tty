@@ -90,6 +90,8 @@ Rules:
 - Blank lines inside an open environment never split the section; blank lines outside an
   environment always do.
 - Non-chord bracket content must be escaped with a leading `*`: `[*N.C.]`, `[*----]`.
+- `{sot}` blocks are treated as tablature only when at least four lines lead with a musical
+  letter and a pipe (`E|------`); decorative `{sot}` blocks used purely for spacing are dropped.
 - Chords follow the ChordPro chord grammar: root `A`-`G` with optional `b`/`#`, optional
   qualifier (`maj`, `min`, `mi`, `m`, `dim`, `aug`, `sus`, `add`, `h`), extension tokens
   (`7`, `69`, `m7b5`, `7sus4`, `7b5`, `7#9`, `9`, `11`, `13`, `alt`, alterations, `^`/`+`),

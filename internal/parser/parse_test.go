@@ -163,15 +163,25 @@ func TestParseSections(t *testing.T) {
 		},
 		{
 			name:  "tab block becomes environment section",
-			chart: "{sot}\nE|--0--|\n{eot}",
+			chart: "{sot}\nE|--0--|--2--|\nB|--2--|--2--|\nG|--2--|--1--|\nD|--2--|--3--|\nA|--0--|--3--|\nE|--X--|--X--|\n{eot}",
 			wantSecs: []Section{
 				{
 					Name: "tab",
 					Lines: []ParsedLine{
-						{Type: LineTypeTab, Raw: "E|--0--|"},
+						{Type: LineTypeTab, Raw: "E|--0--|--2--|"},
+						{Type: LineTypeTab, Raw: "B|--2--|--2--|"},
+						{Type: LineTypeTab, Raw: "G|--2--|--1--|"},
+						{Type: LineTypeTab, Raw: "D|--2--|--3--|"},
+						{Type: LineTypeTab, Raw: "A|--0--|--3--|"},
+						{Type: LineTypeTab, Raw: "E|--X--|--X--|"},
 					},
 				},
 			},
+		},
+		{
+			name:     "decorative sot block dropped",
+			chart:    "{sot}\n------\n{eot}",
+			wantSecs: []Section{},
 		},
 		{
 			name:  "empty environment produces no section",
@@ -200,6 +210,115 @@ func TestParseSections(t *testing.T) {
 						{Type: LineTypeLyric, Raw: "Swing low", Lyrics: "Swing low"},
 					},
 				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := parseChart(t, tt.chart)
+			if !reflect.DeepEqual(doc.Sections, tt.wantSecs) {
+				t.Errorf("Sections = %#v, want %#v", doc.Sections, tt.wantSecs)
+			}
+		})
+	}
+}
+
+func TestParseTabBlockGate(t *testing.T) {
+	sixStrings := "E|--0--|\nB|--2--|\nG|--2--|\nD|--2--|\nA|--0--|\nE|--X--|"
+
+	tests := []struct {
+		name     string
+		chart    string
+		wantSecs []Section
+	}{
+		{
+			name:  "four string lines is the boundary",
+			chart: "{sot}\nE|--0--|\nB|--2--|\nG|--2--|\nD|--2--|\n{eot}",
+			wantSecs: []Section{
+				{Name: "tab", Lines: []ParsedLine{
+					{Type: LineTypeTab, Raw: "E|--0--|"},
+					{Type: LineTypeTab, Raw: "B|--2--|"},
+					{Type: LineTypeTab, Raw: "G|--2--|"},
+					{Type: LineTypeTab, Raw: "D|--2--|"},
+				}},
+			},
+		},
+		{
+			name:     "three string lines dropped",
+			chart:    "{sot}\nE|--0--|\nB|--2--|\nG|--2--|\nsome label\n{eot}",
+			wantSecs: []Section{},
+		},
+		{
+			name:     "pipe mandatory",
+			chart:    "{sot}\nE --0--\nB --2--\nG --2--\nD --2--\nA --0--\n{eot}",
+			wantSecs: []Section{},
+		},
+		{
+			name:     "lowercase letters count",
+			chart:    "{sot}\ne|--0--|\nb|--2--|\ng|--2--|\nd|--2--|\n{eot}",
+			wantSecs: []Section{
+				{Name: "tab", Lines: []ParsedLine{
+					{Type: LineTypeTab, Raw: "e|--0--|"},
+					{Type: LineTypeTab, Raw: "b|--2--|"},
+					{Type: LineTypeTab, Raw: "g|--2--|"},
+					{Type: LineTypeTab, Raw: "d|--2--|"},
+				}},
+			},
+		},
+		{
+			name:  "any musical letter counts including F and C",
+			chart: "{sot}\nF|--1--|\nC|--3--|\nB|--2--|\nE|--0--|\n{eot}",
+			wantSecs: []Section{
+				{Name: "tab", Lines: []ParsedLine{
+					{Type: LineTypeTab, Raw: "F|--1--|"},
+					{Type: LineTypeTab, Raw: "C|--3--|"},
+					{Type: LineTypeTab, Raw: "B|--2--|"},
+					{Type: LineTypeTab, Raw: "E|--0--|"},
+				}},
+			},
+		},
+		{
+			name:  "qualifying block keeps non-string lines verbatim",
+			chart: "{sot}\nCHORDS\n" + sixStrings + "\n{eot}",
+			wantSecs: []Section{
+				{Name: "tab", Lines: []ParsedLine{
+					{Type: LineTypeTab, Raw: "CHORDS"},
+					{Type: LineTypeTab, Raw: "E|--0--|"},
+					{Type: LineTypeTab, Raw: "B|--2--|"},
+					{Type: LineTypeTab, Raw: "G|--2--|"},
+					{Type: LineTypeTab, Raw: "D|--2--|"},
+					{Type: LineTypeTab, Raw: "A|--0--|"},
+					{Type: LineTypeTab, Raw: "E|--X--|"},
+				}},
+			},
+		},
+		{
+			name:  "unclosed qualifying block flushed at EOF",
+			chart: "{sot}\n" + sixStrings,
+			wantSecs: []Section{
+				{Name: "tab", Lines: []ParsedLine{
+					{Type: LineTypeTab, Raw: "E|--0--|"},
+					{Type: LineTypeTab, Raw: "B|--2--|"},
+					{Type: LineTypeTab, Raw: "G|--2--|"},
+					{Type: LineTypeTab, Raw: "D|--2--|"},
+					{Type: LineTypeTab, Raw: "A|--0--|"},
+					{Type: LineTypeTab, Raw: "E|--X--|"},
+				}},
+			},
+		},
+		{
+			name:     "unclosed decorative block dropped at EOF",
+			chart:    "{sot}\n------\n......",
+			wantSecs: []Section{},
+		},
+		{
+			name:  "decorative block abandoned by new environment dropped",
+			chart: "{sot}\n------\n{sov}\nA lyric line\n{eov}",
+			wantSecs: []Section{
+				{Name: "verse", Lines: []ParsedLine{
+					{Type: LineTypeLyric, Raw: "A lyric line", Lyrics: "A lyric line"},
+				}},
 			},
 		},
 	}

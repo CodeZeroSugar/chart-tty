@@ -52,6 +52,7 @@ Settled decisions. Do not re-litigate; if a task contradicts one, stop and flag 
 - **`parseLine` classification order** (first match wins): empty → directive (`{`) → comment (`#`) → tab (`isTabLine`) → chord extraction.
 - `{chorus}` alone opens a chorus environment.
 - An `{end_of_*}` directive flushes whatever environment is currently active, even if the names don't match.
+- **Tab gate**: a `{sot}` block counts as tablature only if ≥4 of its lines match `^[A-Ga-g][ \t]*\|` (any musical letter, mandatory pipe). Qualifying blocks render verbatim; non-qualifying blocks (decorative line breaks) are dropped from the Document entirely.
 
 ## Workflow
 

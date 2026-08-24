@@ -17,9 +17,10 @@ const (
 type Parser struct {
 	Mode ParserMode
 
-	doc            *Document
+	doc       *Document
 	currentSection *Section
-	activeEnv      string
+	activeEnv string
+	tabBuffer []string
 }
 
 func NewParser(mode ParserMode) *Parser {
@@ -34,6 +35,7 @@ func (p *Parser) Parse(chart string) (*Document, error) {
 		Sections: make([]Section, 0),
 	}
 	p.currentSection = nil
+	p.tabBuffer = nil
 
 	switch p.Mode {
 	case ModeChordPro:
@@ -77,14 +79,21 @@ func (p *Parser) parseChordPro(chart string) error {
 				p.handleDirective(dir, data)
 			}
 		case LineTypeEmpty:
-			if p.shouldFlushOnBlankLine() {
+			if p.activeEnv == "tab" {
+				p.tabBuffer = append(p.tabBuffer, "")
+			} else if p.shouldFlushOnBlankLine() {
 				p.flushSection()
 			}
 		case LineTypeComment:
 		default:
-			p.appendLine(line)
+			if p.activeEnv == "tab" {
+				p.tabBuffer = append(p.tabBuffer, line.Raw)
+			} else {
+				p.appendLine(line)
+			}
 		}
 	}
+	p.flushTabBuffer()
 	p.flushSection()
 	return nil
 }
@@ -262,13 +271,37 @@ func (p *Parser) handleEnvironmentDirective(directive, data string) {
 	}
 	switch action {
 	case "start":
+		p.flushTabBuffer()
 		p.flushSection()
 		p.activeEnv = env
 		p.currentSection = &Section{Name: label}
 	case "end":
+		p.flushTabBuffer()
 		if p.activeEnv == env || p.activeEnv != "" {
 			p.flushSection()
 		}
+	}
+}
+
+// flushTabBuffer evaluates a pending {sot} block when the parser leaves the
+// tab environment (by {eot}, an unrelated directive, or end of input).
+// Qualifying blocks are appended verbatim as tab lines; decorative blocks are
+// discarded entirely.
+func (p *Parser) flushTabBuffer() {
+	defer func() { p.tabBuffer = nil }()
+	if p.activeEnv != "tab" || len(p.tabBuffer) == 0 {
+		return
+	}
+	if !isRealTabBlock(p.tabBuffer) {
+		return
+	}
+	for _, raw := range p.tabBuffer {
+		p.appendLine(ParsedLine{
+			Type:   LineTypeTab,
+			Raw:    raw,
+			Lyrics: "",
+			Chords: nil,
+		})
 	}
 }
 

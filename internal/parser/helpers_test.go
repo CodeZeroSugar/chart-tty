@@ -238,6 +238,56 @@ func TestResolveAlias(t *testing.T) {
 	}
 }
 
+func TestIsStringNoteLine(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want bool
+	}{
+		{"uppercase with pipe", "E|------", true},
+		{"lowercase", "e|--0--", true},
+		{"any musical letter F", "F|--1--", true},
+		{"any musical letter C", "C|--3--", true},
+		{"indented", "   B|--2--", true},
+		{"space before pipe", "E |---", true},
+		{"pipe only no dashes", "G|", true},
+		{"no pipe", "E --0--", false},
+		{"dashes only", "------", false},
+		{"out of range letter H", "H|--1--", false},
+		{"no leading letter", "--3--", false},
+		{"empty", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isStringNoteLine(tt.line); got != tt.want {
+				t.Errorf("isStringNoteLine(%q) = %v, want %v", tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsRealTabBlock(t *testing.T) {
+	tests := []struct {
+		name  string
+		lines []string
+		want  bool
+	}{
+		{"six string lines", []string{"E|--", "B|--", "G|--", "D|--", "A|--", "E|--"}, true},
+		{"four is boundary", []string{"E|--", "B|--", "G|--", "D|--"}, true},
+		{"three plus junk", []string{"E|--", "B|--", "G|--", "junk"}, false},
+		{"decorative dashes only", []string{"------", "......"}, false},
+		{"empty block", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isRealTabBlock(tt.lines); got != tt.want {
+				t.Errorf("isRealTabBlock(%#v) = %v, want %v", tt.lines, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDetectParserMode(t *testing.T) {
 	tests := []struct {
 		name  string
