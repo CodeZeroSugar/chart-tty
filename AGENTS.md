@@ -40,6 +40,10 @@ charts/                    local sample charts (gitignored, NOT committed) - smo
 
 Settled decisions. Do not re-litigate; if a task contradicts one, stop and flag it.
 
+**Format authority**: for questions about the ChordPro format itself, obey
+`docs/chordpro-spec.md` (distilled from chordpro.org with per-section citations). The
+"chart-tty deltas" section there lists where this project deliberately diverges.
+
 - **Directive handling is case-insensitive** everywhere (validation, category dispatch, meta/env handlers, env aliases).
 - `{subtitle}` and `{st}` map to the **Artist** field.
 - **Strict chord grammar** (validator + anything parsing chord names): root `[A-G]` with optional `b`/`#`; optional qualifier (`maj`, `min`, `mi`, `m`, `dim`, `aug`, `sus`, `add`, `h`); extension tokens (`7`, `69`, `m7b5`, `7sus4`, `7b5`, `7#9`, `9`, `11`, `13`, `alt`, `+`, alterations, `sus/add/maj/^` forms); bass is a root note (`C/G`) **or a number** (`G6/9`).
