@@ -139,6 +139,43 @@ func TestSetlistListsInCreationOrder(t *testing.T) {
 	}
 }
 
+func TestDeleteChartRemovesRow(t *testing.T) {
+	s := openTest(t)
+	id, _ := s.AddChart("Doomed", "", "import", "content")
+	if err := s.DeleteChart(id); err != nil {
+		t.Fatalf("DeleteChart(): %v", err)
+	}
+	if _, err := s.GetChart(id); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetChart after delete = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteChartRemovesFromSetlist(t *testing.T) {
+	s := openTest(t)
+	id, _ := s.AddChart("Setlist Song", "", "import", "c")
+	slID, _ := s.CreateSetlist("Gig")
+	if err := s.AppendSetlistItem(slID, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteChart(id); err != nil {
+		t.Fatal(err)
+	}
+	items, err := s.SetlistCharts(slID)
+	if err != nil {
+		t.Fatalf("SetlistCharts(): %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("setlist still has %d charts after deleting its only chart", len(items))
+	}
+}
+
+func TestDeleteChartMissingReturnsNotFound(t *testing.T) {
+	s := openTest(t)
+	if err := s.DeleteChart(12345); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("DeleteChart(missing) = %v, want ErrNotFound", err)
+	}
+}
+
 func TestDefaultPathUnderDataHome(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/tmp/data-here")
 	path, err := DefaultPath()

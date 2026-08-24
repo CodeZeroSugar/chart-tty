@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -25,8 +26,30 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-// runImport imports a chart file into the library and prints the result.
-func runImport(configFlag, importPath string) {
+// runDelete removes a chart from the library by id.
+func runDelete(configFlag string, id int64) {
+	libPath := resolveLibraryPath(configFlag)
+	store, err := db.Open(libPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: opening library: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	if err := store.DeleteChart(id); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			fmt.Fprintf(os.Stderr, "Error: chart %d not found in %s\n", id, libPath)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "Error: deleting chart: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Deleted chart %d from %s\n", id, libPath)
+}
+
+// resolveLibraryPath returns the library database path from the config's
+// [library] section, falling back to the default location.
+func resolveLibraryPath(configFlag string) string {
 	cfgPath := configFlag
 	if cfgPath == "" {
 		var err error
@@ -48,6 +71,12 @@ func runImport(configFlag, importPath string) {
 			os.Exit(1)
 		}
 	}
+	return libPath
+}
+
+// runImport imports a chart file into the library and prints the result.
+func runImport(configFlag, importPath string) {
+	libPath := resolveLibraryPath(configFlag)
 
 	store, err := db.Open(libPath)
 	if err != nil {
@@ -84,11 +113,16 @@ func main() {
 	writeFlag := flag.Bool("write", false, "write converted chart to <name>.pro next to source (requires --ai-convert)")
 	setKeyFlag := flag.String("set-api-key", "", "store AI API key in config ('-' reads the key from stdin)")
 	importFlag := flag.String("import", "", "import a chart file into the library and exit")
+	deleteFlag := flag.Int("delete", 0, "delete a chart from the library by id and exit")
 	flag.Usage = usage
 	flag.Parse()
 
 	if *versionFlag {
 		fmt.Printf("chart-tty %s\n", version)
+		os.Exit(0)
+	}
+	if *deleteFlag != 0 {
+		runDelete(*configFlag, int64(*deleteFlag))
 		os.Exit(0)
 	}
 	if *importFlag != "" {

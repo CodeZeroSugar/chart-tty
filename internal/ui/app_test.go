@@ -405,6 +405,52 @@ func TestLibraryBrowserEmpty(t *testing.T) {
 	}
 }
 
+func TestDeleteChartFromBrowser(t *testing.T) {
+	s := testStore(t)
+	id1, _ := s.AddChart("Keep Me", "", "import", "{title: Keep Me}\n[G]x")
+	id2, _ := s.AddChart("Doomed", "", "import", "{title: Doomed}\n[C]x")
+
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+
+	// List is newest-first: Doomed is index 0.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	if !strings.Contains(m.View(), `Delete "Doomed"?`) {
+		t.Fatalf("confirm banner missing: %q", m.View())
+	}
+
+	// Cancel first: n keeps the chart.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if strings.Contains(m.View(), `Delete "Doomed"?`) {
+		t.Fatalf("banner should clear on n: %q", m.View())
+	}
+	if _, err := s.GetChart(id2); err != nil {
+		t.Errorf("chart should survive cancel: %v", err)
+	}
+
+	// Arm again, this time confirm with y.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+
+	if _, err := s.GetChart(id2); err == nil {
+		t.Error("chart still exists after y confirm")
+	}
+	if !strings.Contains(m.View(), "deleted Doomed") {
+		t.Errorf("message missing: %q", m.View())
+	}
+	if _, err := s.GetChart(id1); err != nil {
+		t.Errorf("unrelated chart was deleted: %v", err)
+	}
+
+	// Deleting the last remaining item clamps the cursor safely.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	if _, err := s.GetChart(id1); err == nil {
+		t.Error("last chart still exists after y")
+	}
+	_ = id1
+}
+
 func TestImportCurrentChart(t *testing.T) {
 	s := testStore(t)
 	doc := &parser.Document{

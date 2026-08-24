@@ -17,6 +17,10 @@ import (
 // taken.
 var ErrExists = errors.New("setlist name already exists")
 
+// ErrNotFound is returned when operating on a chart (or setlist) id that does
+// not exist.
+var ErrNotFound = errors.New("chart not found")
+
 // Store is a handle to the chart library database.
 type Store struct {
 	db *sql.DB
@@ -83,6 +87,11 @@ func Open(path string) (*Store, error) {
 	}
 	// modernc/sqlite handles concurrent access within one connection best.
 	sqlDB.SetMaxOpenConns(1)
+	// Enforce foreign keys (ON DELETE CASCADE) on this connection.
+	if _, err := sqlDB.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("enabling foreign keys: %w", err)
+	}
 	s := &Store{db: sqlDB}
 	if err := s.migrate(); err != nil {
 		sqlDB.Close()
@@ -98,6 +107,10 @@ func OpenMemory() (*Store, error) {
 		return nil, err
 	}
 	sqlDB.SetMaxOpenConns(1)
+	if _, err := sqlDB.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		sqlDB.Close()
+		return nil, err
+	}
 	s := &Store{db: sqlDB}
 	if err := s.migrate(); err != nil {
 		sqlDB.Close()
@@ -181,13 +194,37 @@ func (s *Store) GetChart(id int64) (StoredChart, error) {
 		`SELECT id, title, artist, source, content, created_at, updated_at FROM charts WHERE id = ?`, id,
 	).Scan(&c.ID, &c.Title, &c.Artist, &c.Source, &c.Content, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
-		return c, fmt.Errorf("chart %d not found", id)
+		return c, ErrNotFound
 	}
 	if err != nil {
 		return c, fmt.Errorf("querying chart %d: %w", id, err)
 	}
 	c.CreatedAt, c.UpdatedAt = created.UTC(), updated.UTC()
 	return c, nil
+}
+
+// DeleteChart removes a chart and its setlist memberships. The id is removed
+// from every setlist explicitly (belt-and-suspenders on top of the FK
+// cascade).
+func (s *Store) DeleteChart(id int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("starting delete: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM setlist_items WHERE chart_id = ?`, id); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("removing setlist memberships: %w", err)
+	}
+	res, err := tx.Exec(`DELETE FROM charts WHERE id = ?`, id)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("deleting chart %d: %w", id, err)
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		tx.Rollback()
+		return ErrNotFound
+	}
+	return tx.Commit()
 }
 
 // ListCharts returns all stored charts, newest first.

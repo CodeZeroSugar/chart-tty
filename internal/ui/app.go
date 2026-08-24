@@ -48,6 +48,7 @@ type Model struct {
 	store         *db.Store
 	browseCharts  []db.ChartMeta
 	browseCursor  int
+	deletePending string // title awaiting y/n confirmation
 	setlists      []db.SetlistMeta
 	setlistCursor int
 	inputMode     bool
@@ -303,6 +304,27 @@ func (m Model) updatePickSetlistKeys(k string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateBrowseChartsKeys(k string) (tea.Model, tea.Cmd) {
+	// Confirm state: only y/n/esc act while a delete is pending.
+	if m.deletePending != "" {
+		switch k {
+		case "y":
+			id := m.browseCharts[m.browseCursor].ID
+			title := m.browseCharts[m.browseCursor].Title
+			if err := m.store.DeleteChart(id); err != nil {
+				m.message = fmt.Sprintf("delete failed: %v", err)
+			} else {
+				m.message = "deleted " + title
+			}
+			m.deletePending = ""
+			m.refreshCharts()
+			return m, nil
+		case "n", "esc":
+			m.deletePending = ""
+			return m, nil
+		}
+		return m, nil
+	}
+
 	switch k {
 	case "down", "j":
 		if m.browseCursor < len(m.browseCharts)-1 {
@@ -315,6 +337,10 @@ func (m Model) updateBrowseChartsKeys(k string) (tea.Model, tea.Cmd) {
 	case "enter":
 		if len(m.browseCharts) > 0 {
 			return m.openStoredChart(m.browseCharts[m.browseCursor].ID)
+		}
+	case "d":
+		if len(m.browseCharts) > 0 {
+			m.deletePending = m.browseCharts[m.browseCursor].Title
 		}
 	case "s":
 		if m.store == nil {
@@ -335,6 +361,16 @@ func (m Model) updateBrowseChartsKeys(k string) (tea.Model, tea.Cmd) {
 		m.screen = screenViewChart
 	}
 	return m, nil
+}
+
+// refreshCharts reloads the library listing and clamps the cursor.
+func (m *Model) refreshCharts() {
+	if lists, err := m.store.ListCharts(); err == nil {
+		m.browseCharts = lists
+		if m.browseCursor >= len(lists) {
+			m.browseCursor = max(len(lists)-1, 0)
+		}
+	}
 }
 
 func (m Model) updateViewSetlistKeys(k string) (tea.Model, tea.Cmd) {
@@ -604,6 +640,15 @@ func (m Model) viewBrowseCharts() string {
 	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Library"))
 	sb.WriteString("\n\n")
 
+	if m.deletePending != "" {
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow")).Render(fmt.Sprintf("Delete %q? (y/n)", m.deletePending)))
+		sb.WriteString("\n\n")
+	}
+	if m.message != "" && m.deletePending == "" {
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render(m.message))
+		sb.WriteString("\n\n")
+	}
+
 	if len(m.browseCharts) == 0 {
 		sb.WriteString("(library is empty — import a chart with i from the viewer)")
 		return sb.String()
@@ -624,8 +669,12 @@ func (m Model) viewBrowseCharts() string {
 		sb.WriteString(marker + row)
 		sb.WriteString("\n")
 	}
+	hint := "j/k move · enter open · s add to setlist · d delete · esc back"
+	if m.deletePending != "" {
+		hint = "y confirm delete · n/esc cancel"
+	}
 	sb.WriteString("\n")
-	sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k move · enter open · esc back"))
+	sb.WriteString(lipgloss.NewStyle().Faint(true).Render(hint))
 	return sb.String()
 }
 

@@ -31,6 +31,8 @@ rendered chart as plain text instead.
 | `--no-color` | Disable colored output (also honors `NO_COLOR` env var) |
 | `--ai-convert` | Convert chart to compliant ChordPro via AI |
 | `--write` | Write converted chart to `<name>.pro` next to source (requires `--ai-convert`) |
+| `--import PATH` | Import a chart file into the library and exit |
+| `--delete ID` | Delete a chart from the library by id and exit |
 | `--version` | Print version and exit |
 | `-h`, `--help` | Show usage and exit |
 
@@ -59,6 +61,7 @@ From the TUI:
 - **`i`** imports the loaded chart; **`s`** after an AI conversion saves the converted
   version (source tagged `ai`).
 - **`L`** opens the library browser — pick any stored chart with j/k + enter.
+- **`d`** deletes the highlighted chart (confirmed with `y`; `n`/`esc` cancels).
 - **`S`** opens setlists: `n` creates one (typed name), enter opens it.
 - Inside a setlist, paging past the end of a chart continues to the next chart
   (and back-paging returns to the previous one) — built for live playback.
@@ -67,6 +70,7 @@ Charts can also be imported from the CLI:
 
 ```sh
 chart-tty --import path/to/song.pro
+chart-tty --delete 3          # remove a chart by its library id
 ```
 
 ### Wide terminals
