@@ -9,28 +9,53 @@ func TestBuildPrompt(t *testing.T) {
 	chart := "C  G\nSwing low"
 	system, user := BuildPrompt(chart)
 
-	if !strings.Contains(system, "ChordPro") {
-		t.Error("system prompt does not mention ChordPro")
-	}
-	if !strings.Contains(system, "start_of_verse") {
-		t.Error("system prompt lacks directive rules")
-	}
-	if !strings.Contains(system, "[*N.C.]") {
-		t.Error("system prompt lacks asterisk escape rule")
-	}
+	// Embedded spec reference content (prompt core sections).
 	for _, want := range []string{
+		"File format basics",
+		"## 2. Chords",
+		"start_of_verse",
+	} {
+		if !strings.Contains(system, want) {
+			t.Errorf("system prompt missing spec content %q", want)
+		}
+	}
+	// Excluded sections must stay out of the prompt (gateway size constraint).
+	for _, banned := range []string{"Chart-tty deltas", "## 5. Tab", "Sources"} {
+		if strings.Contains(system, banned) {
+			t.Errorf("system prompt must not include excluded section %q", banned)
+		}
+	}
+
+	// Conversion wrapper rules.
+	for _, want := range []string{
+		"Output ONLY the converted chart",
+		"Never truncate the song",
 		"individually bracketed",
 		"[*x2]",
 		"[*Repeat intro]",
+		"[*N.C.]",
 		"[Fm] [G#] [Eb] [Bb]",
 		"{start_of_verse: Verse 1}",
-		"Never truncate",
 		"chord-over-lyrics",
 	} {
 		if !strings.Contains(system, want) {
-			t.Errorf("system prompt missing %q", want)
+			t.Errorf("system prompt missing conversion rule %q", want)
 		}
 	}
+
+	// Never-emit blacklist.
+	for _, want := range []string{
+		"{define:",
+		"{transpose:",
+		"{start_of_abc}",
+		"x_",
+		"Conditional directive selectors",
+	} {
+		if !strings.Contains(system, want) {
+			t.Errorf("system prompt missing never-emit entry %q", want)
+		}
+	}
+
 	if user != chart {
 		t.Errorf("user prompt = %q, want raw chart", user)
 	}

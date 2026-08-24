@@ -41,8 +41,9 @@ charts/                    local sample charts (gitignored, NOT committed) - smo
 Settled decisions. Do not re-litigate; if a task contradicts one, stop and flag it.
 
 **Format authority**: for questions about the ChordPro format itself, obey
-`docs/chordpro-spec.md` (distilled from chordpro.org with per-section citations). The
-"chart-tty deltas" section there lists where this project deliberately diverges.
+`internal/parser/chordpro-spec.md` (distilled from chordpro.org with per-section citations;
+embedded into the binary via `parser.SpecReference`). The "chart-tty deltas" section there
+lists where this project deliberately diverges.
 
 - **Directive handling is case-insensitive** everywhere (validation, category dispatch, meta/env handlers, env aliases).
 - `{subtitle}` and `{st}` map to the **Artist** field.

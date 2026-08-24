@@ -9,6 +9,13 @@ import (
 //go:embed spec.json
 var embeddedSpec []byte
 
+// SpecReference is the canonical ChordPro specification reference distilled
+// from chordpro.org, including the chart-tty deltas section. See
+// chordpro-spec.md alongside this file.
+//
+//go:embed chordpro-spec.md
+var SpecReference string
+
 var Spec ChordProSpec
 
 type DirectiveCategory int
