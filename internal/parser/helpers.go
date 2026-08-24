@@ -168,6 +168,11 @@ func extractDirective(directiveLine string) (directive string, data string) {
 
 func getDirectiveCategory(directive string) DirectiveCategory {
 	d := strings.ToLower(directive)
+	// Spec: arbitrary section names are allowed (letters, digits, underscores);
+	// unknown environments are treated as part of the song lyrics.
+	if strings.HasPrefix(d, "start_of_") || strings.HasPrefix(d, "end_of_") {
+		return CategoryEnvironment
+	}
 	if slices.Contains(Spec.EnvironmentDirectives, d) {
 		return CategoryEnvironment
 	}

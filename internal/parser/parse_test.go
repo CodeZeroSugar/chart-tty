@@ -333,6 +333,25 @@ func TestParseTabBlockGate(t *testing.T) {
 	}
 }
 
+func TestParseArbitraryEnvironmentNames(t *testing.T) {
+	chart := `{start_of_intro: Intro}
+Four bars of [D]nothing
+{end_of_intro}`
+	doc := parseChart(t, chart)
+
+	want := []Section{
+		{
+			Name: "Intro",
+			Lines: []ParsedLine{
+				{Type: LineTypeChordAndLyric, Raw: "Four bars of [D]nothing", Lyrics: "Four bars of nothing", Chords: []ChordToken{{Name: "D", Position: 13}}},
+			},
+		},
+	}
+	if !reflect.DeepEqual(doc.Sections, want) {
+		t.Errorf("Sections = %#v, want %#v (arbitrary env names are spec-legal)", doc.Sections, want)
+	}
+}
+
 func TestParseConditionalSelectors(t *testing.T) {
 	chart := `{title-soprano: Selected Song}
 {start_of_verse-soprano}

@@ -61,6 +61,8 @@ func TestIsValidDirective(t *testing.T) {
 		{"x_ bare", "x_", true},
 		{"conditional selector stripped", "title-soprano", true},
 		{"conditional env selector", "start_of_verse-soprano", true},
+		{"arbitrary environment name", "start_of_intro", true},
+		{"arbitrary environment end", "end_of_intro", true},
 	}
 
 	for _, tt := range tests {

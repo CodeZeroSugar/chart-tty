@@ -31,6 +31,10 @@ func (v *Validator) IsValidDirective(k string) bool {
 	if strings.HasPrefix(key, "x_") {
 		return true
 	}
+	// Spec: arbitrary section names (letters, digits, underscores) are legal.
+	if strings.HasPrefix(key, "start_of_") || strings.HasPrefix(key, "end_of_") {
+		return true
+	}
 	return slices.Contains(Spec.MetaDirectives, key) || slices.Contains(Spec.FormattingDirectives, key) || slices.Contains(Spec.EnvironmentDirectives, key)
 }
 
