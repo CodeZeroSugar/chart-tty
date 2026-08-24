@@ -26,6 +26,11 @@ func (v *Validator) IsValidDirective(k string) bool {
 	if v.AllowUnkDirectives {
 		return true
 	}
+	// Per spec, custom x_ directives must be completely ignored by
+	// applications that do not handle them — no warning, no error.
+	if strings.HasPrefix(key, "x_") {
+		return true
+	}
 	return slices.Contains(Spec.MetaDirectives, key) || slices.Contains(Spec.FormattingDirectives, key) || slices.Contains(Spec.EnvironmentDirectives, key)
 }
 

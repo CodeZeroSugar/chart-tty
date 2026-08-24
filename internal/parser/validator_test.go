@@ -57,6 +57,8 @@ func TestIsValidDirective(t *testing.T) {
 		{"empty string", "", false},
 		{"uppercase meta directive", "Title", true},
 		{"uppercase env directive", "SOC", true},
+		{"x_ custom directive ignored per spec", "x_mspro_pedal_setting", true},
+		{"x_ bare", "x_", true},
 	}
 
 	for _, tt := range tests {
@@ -321,6 +323,17 @@ Comin' for to carry me [A7]home.
 				t.Errorf("ValidateChart() error %q does not contain %q", err.Error(), tt.wantErrContain)
 			}
 		})
+	}
+}
+
+func TestValidateChartXUnderscoreIgnored(t *testing.T) {
+	v, err := NewValidator()
+	if err != nil {
+		t.Fatalf("NewValidator() unexpected error: %v", err)
+	}
+	valid, err := v.ValidateChart("{x_mspro_pedal: 4}\n{title: Song}\nSwing [D]low")
+	if !valid {
+		t.Errorf("ValidateChart() valid = false for x_ directive, want true (spec: ignore silently); err=%v", err)
 	}
 }
 
