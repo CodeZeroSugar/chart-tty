@@ -81,6 +81,22 @@ func NewDocModel(doc *parser.Document, cfg RenderConfig) Model {
 	return m
 }
 
+// NewLibraryModel launches the TUI straight into the library browser with no
+// chart loaded — the entry point for running chart-tty without a file.
+func NewLibraryModel(store *db.Store, cfg RenderConfig) Model {
+	m := NewModel(nil, cfg)
+	m.store = store
+	m.screen = screenBrowseCharts
+	if charts, err := store.ListCharts(); err == nil {
+		m.browseCharts = charts
+	}
+	ti := textinput.New()
+	ti.Placeholder = "setlist name"
+	ti.CharLimit = 60
+	m.nameInput = ti
+	return m
+}
+
 func (m Model) SetKeys(keys config.KeyConfig) Model {
 	m.keys = keys
 	return m
@@ -149,7 +165,6 @@ func (m Model) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateNameInput(msg)
 	}
 	k := key.String()
-	println("DBG route k=", k, "screen=", int(m.screen))
 
 	switch m.screen {
 	case screenBrowseCharts:
@@ -532,6 +547,14 @@ func (m Model) View() string {
 	case screenViewSetlist:
 		return m.viewSetlist()
 	}
+	if m.doc == nil && len(m.lines) == 0 {
+		out := lipgloss.NewStyle().Bold(true).Render("chart-tty") + "\n\n" +
+			lipgloss.NewStyle().Faint(true).Render("No chart loaded.\nL library · S setlists · q quit")
+		if m.message != "" {
+			out += "\n\n" + lipgloss.NewStyle().Faint(true).Render(m.message)
+		}
+		return out
+	}
 	var sb strings.Builder
 	title := m.title
 	if k := m.currentKey(); k != "" {
@@ -586,7 +609,7 @@ func (m Model) viewBrowseCharts() string {
 		return sb.String()
 	}
 
-	bodyHeight := m.bodyHeight() - 2 // header + blank line
+	bodyHeight := m.bodyHeight() - 3 // title row, blank line, and gap before help
 	start := max(m.browseCursor-bodyHeight+1, 0)
 	end := min(start+bodyHeight, len(m.browseCharts))
 
@@ -646,7 +669,7 @@ func (m Model) viewBrowseSetlists(picking bool) string {
 		return sb.String()
 	}
 
-	bodyHeight := m.bodyHeight() - 2
+	bodyHeight := m.bodyHeight() - 3 // title row, blank line, and gap before help
 	start := max(m.setlistCursor-bodyHeight+1, 0)
 	end := min(start+bodyHeight, len(m.setlists))
 
@@ -693,8 +716,9 @@ func (m Model) viewSetlist() string {
 
 	if m.setlist.index < len(m.setlist.charts) {
 		lines := m.setlist.charts[m.setlist.index].lines
-		top := m.offset
-		bottom := min(top+m.bodyHeight(), len(lines))
+		rows := max(m.bodyHeight()-1, 1) // header is always printed
+		top := min(m.offset, max(len(lines)-1, 0))
+		bottom := min(top+rows, len(lines))
 		for i := top; i < bottom; i++ {
 			sb.WriteString(lines[i])
 			sb.WriteString("\n")
@@ -833,7 +857,9 @@ func Run(doc *parser.Document, cfg RenderConfig) error {
 }
 
 func RunModel(m Model) error {
-	p := tea.NewProgram(m)
+	// Alternate screen: multi-screen TUIs need full-frame repaints; inline
+	// mode appends below previous output and corrupts on height changes.
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }

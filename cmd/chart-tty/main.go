@@ -137,15 +137,6 @@ func main() {
 	}
 
 	args := flag.Args()
-	if len(args) < 1 {
-		flag.Usage()
-		os.Exit(2)
-	}
-	absPath, err := filepath.Abs(args[0])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to resolve path %q: %v\n", args[0], err)
-		os.Exit(1)
-	}
 
 	appCfg, err := config.Load(cfgPath)
 	if err != nil {
@@ -153,6 +144,49 @@ func main() {
 		os.Exit(1)
 	}
 
+	rcfg := ui.RenderConfigFromConfig(appCfg)
+	if *noColorFlag || os.Getenv("NO_COLOR") != "" {
+		rcfg = ui.RenderConfig{}
+	}
+	isTTY := term.IsTerminal(int(os.Stdout.Fd())) && term.IsTerminal(int(os.Stdin.Fd()))
+
+	// No chart file: launch straight into the library (interactive only).
+	if len(args) == 0 {
+		if !isTTY {
+			flag.Usage()
+			os.Exit(2)
+		}
+		libPath := appCfg.Library.Path
+		if libPath == "" {
+			libPath, err = db.DefaultPath()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		store, dbErr := db.Open(libPath)
+		if dbErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: opening library: %v\n", dbErr)
+			os.Exit(1)
+		}
+		defer store.Close()
+		m := ui.NewLibraryModel(store, rcfg).SetKeys(appCfg.Keys)
+		if err := ui.RunModel(m); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: TUI failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *aiConvertFlag || *writeFlag || *transposeFlag != 0 {
+		fmt.Fprintf(os.Stderr, "Error: --ai-convert/--write/--transpose require a chart file\n")
+		os.Exit(2)
+	}
+	absPath, err := filepath.Abs(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to resolve path %q: %v\n", args[0], err)
+		os.Exit(1)
+	}
 	bytes, err := os.ReadFile(absPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: unable to read file: %v\n", err)
@@ -208,12 +242,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	rcfg := ui.RenderConfigFromConfig(appCfg)
-	if *noColorFlag || os.Getenv("NO_COLOR") != "" {
-		rcfg = ui.RenderConfig{}
-	}
-
-	isTTY := term.IsTerminal(int(os.Stdout.Fd())) && term.IsTerminal(int(os.Stdin.Fd()))
 	if isTTY {
 		libPath := appCfg.Library.Path
 		if libPath == "" {
