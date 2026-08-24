@@ -17,10 +17,10 @@ const (
 type Parser struct {
 	Mode ParserMode
 
-	doc       *Document
+	doc            *Document
 	currentSection *Section
-	activeEnv string
-	tabBuffer []string
+	activeEnv      string
+	tabBuffer      []string
 }
 
 func NewParser(mode ParserMode) *Parser {
@@ -256,6 +256,8 @@ func (p *Parser) handleDirective(directive, data string) {
 	case CategoryFormatting:
 	case CategoryMeta:
 		p.handleMetaDirective(directiveLower, data)
+	case CategoryIgnored:
+		// Spec-legal, unsupported: silently skipped.
 	case CategoryUnknown:
 	}
 }

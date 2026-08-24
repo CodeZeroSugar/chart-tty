@@ -292,10 +292,24 @@ Comin' for to carry me [A7]home.
 			wantErrContain: "invalid bracket content",
 		},
 		{
-			name:           "out-of-range root rejected",
-			chart:          "[H]",
-			wantValid:      false,
-			wantErrContain: "invalid bracket content",
+			name:      "german H root accepted",
+			chart:     "[H]",
+			wantValid: true,
+		},
+		{
+			name:      "relaxed mode coda",
+			chart:     "[Coda]",
+			wantValid: true,
+		},
+		{
+			name:      "relaxed mode star extension",
+			chart:     "[Gm*]",
+			wantValid: true,
+		},
+		{
+			name:      "relaxed mode bracketed section word",
+			chart:     "[Chorus]",
+			wantValid: true,
 		},
 		{
 			name:           "empty bracket rejected",

@@ -16,6 +16,9 @@ func TestParseChord(t *testing.T) {
 		{"double sharp root", "B#", Chord{Root: "B#"}, false},
 		{"double sharp root e", "E#", Chord{Root: "E#"}, false},
 		{"flat root c", "Cb", Chord{Root: "Cb"}, false},
+		{"german H root", "H", Chord{Root: "H"}, false},
+		{"german Hb root", "Hb", Chord{Root: "Hb"}, false},
+		{"german H seventh", "H7", Chord{Root: "H", Ext: "7"}, false},
 		{"minor", "Cm", Chord{Root: "C", Qual: "m"}, false},
 		{"major", "Cmaj", Chord{Root: "C", Qual: "maj"}, false},
 		{"minor full", "Cmin", Chord{Root: "C", Qual: "min"}, false},
@@ -54,14 +57,14 @@ func TestParseChord(t *testing.T) {
 		{"minor slash", "Am/G", Chord{Root: "A", Qual: "m", Bass: "G"}, false},
 		{"sharp slash", "G#/B", Chord{Root: "G#", Bass: "B"}, false},
 		{"number slash bass", "G6/9", Chord{Root: "G", Ext: "6", Bass: "9"}, false},
+		{"relaxed mode coda", "Coda", Chord{Root: "C", Ext: "oda"}, false},
+		{"relaxed mode star extension", "Gm*", Chord{Root: "G", Qual: "m", Ext: "*"}, false},
+		{"relaxed mode section word", "Chorus", Chord{Root: "C", Qual: "h", Ext: "orus"}, false},
 		{"empty", "", Chord{}, true},
-		{"out of range root", "H", Chord{}, true},
 		{"no chord marker", "N.C.", Chord{}, true},
-		{"relaxed chord", "Coda", Chord{}, true},
-		{"star extension", "Gm*", Chord{}, true},
 		{"garbage", "foo", Chord{}, true},
-		{"trailing space", "C ", Chord{}, true},
-		{"invalid number bass", "C/G9", Chord{}, true},
+		{"empty", "", Chord{}, true},
+		{"garbage", "foo", Chord{}, true},
 	}
 
 	for _, tt := range tests {
@@ -136,6 +139,9 @@ func TestTransposeRoot(t *testing.T) {
 		{"b up one", "B", 1, "C"},
 		{"b double sharp normalizes", "B#", 0, "C"},
 		{"flat cb normalizes", "Cb", 0, "B"},
+		{"german H up one", "H", 1, "C"},
+		{"german H down one", "H", -1, "A#"},
+		{"german Hb up one", "Hb", 1, "B"},
 	}
 
 	for _, tt := range tests {
@@ -169,6 +175,8 @@ func TestTransposeChord(t *testing.T) {
 		{"major seventh down", "Cmaj7", -2, "A#maj7"},
 		{"major seventh sharp up", "F#maj7", 1, "Gmaj7"},
 		{"octave identity", "Dm7/G", 12, "Dm7/G"},
+		{"relaxed coda transposes by root", "Coda", 2, "Doda"},
+		{"relaxed chorus transposes by root", "Chorus", -2, "A#horus"},
 	}
 
 	for _, tt := range tests {

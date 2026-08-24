@@ -82,7 +82,9 @@ func validateBracketContent(raw string) bool {
 	if r[0] == '*' {
 		return true
 	}
-	return chordRegex.MatchString(r)
+	// Strict grammar first; spec relaxed mode (valid root + any extension
+	// tail, e.g. [Coda], [Gm*]) accepts the rest.
+	return strictChordRe.MatchString(r) || relaxedChordRe.MatchString(r)
 }
 
 func isTabLine(s string) bool {
@@ -163,7 +165,20 @@ func extractDirective(directiveLine string) (directive string, data string) {
 	if len(parts) > 1 {
 		return stripSelector(strings.TrimSpace(parts[0])), strings.TrimSpace(strings.Join(parts[1:], " "))
 	}
-	return stripSelector(strings.TrimSpace(parts[0])), ""
+
+	// No colon: either a bare directive ({soc}) or the spec's bare/attribute
+	// argument forms, equivalent to the colon form:
+	//   {start_of_verse Verse 1}
+	//   {start_of_verse label="Verse 1"}
+	name := parts[0]
+	if strings.Contains(name, " ") {
+		tokens := strings.SplitN(name, " ", 2)
+		data = strings.TrimSpace(tokens[1])
+		data = strings.TrimPrefix(data, "label=")
+		data = strings.Trim(strings.TrimSpace(data), "\"'")
+		return stripSelector(strings.TrimSpace(tokens[0])), data
+	}
+	return stripSelector(name), ""
 }
 
 func getDirectiveCategory(directive string) DirectiveCategory {

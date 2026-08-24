@@ -3,12 +3,9 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 )
-
-var chordRegex = regexp.MustCompile(`^[A-G][b#]?(?:maj|min|mi|m|dim|aug|sus|add|h)?(?:[0-9]+|sus[0-9]*|add[0-9]*|maj[0-9]*|\^[0-9]*|[b#-][0-9]+|alt|\+)*(\/(?:[A-G][b#]?|[0-9]+))?$`)
 
 type Validator struct {
 	AllowUnkDirectives bool
@@ -57,11 +54,7 @@ func (v *Validator) ValidateChart(chart string) (bool, error) {
 			return false, fmt.Errorf("syntax error: unclosed directive on line %d", n+1)
 		}
 		if strings.HasPrefix(l, "{") && strings.HasSuffix(l, "}") {
-			inner := l[1 : len(l)-1]
-			inner = strings.TrimSpace(inner)
-
-			parts := strings.SplitN(inner, ":", 2)
-			directive := strings.TrimSpace(parts[0])
+			directive, _ := extractDirective(l)
 
 			if !v.IsValidDirective(directive) {
 				return false, fmt.Errorf("directive error: invalid directive '%s' on line %d", l, n+1)
