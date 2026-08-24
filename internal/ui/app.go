@@ -110,10 +110,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.transpose--
 				m.lines = Render(m.doc, m.cfg)
 			}
-		case k == "pgup":
-			m.offset -= max(m.height, 1)
+		case k == "pgup" || k == "b":
+			m.offset -= max(m.bodyHeight(), 1)
 		case k == "pgdown" || k == " ":
-			m.offset += max(m.height, 1)
+			m.offset += max(m.bodyHeight(), 1)
 		case k == "home" || k == "g":
 			m.offset = 0
 		case k == "end" || k == "G":
@@ -131,13 +131,40 @@ func (m *Model) clampOffset() {
 	if m.offset < 0 {
 		m.offset = 0
 	}
-	maxOff := len(m.lines) - m.height
+	maxOff := len(m.lines) - m.visibleRows()
 	if maxOff < 0 {
 		maxOff = 0
 	}
 	if m.offset > maxOff {
 		m.offset = maxOff
 	}
+}
+
+// bodyHeight is the number of terminal rows available to chart content after
+// reserving rows for the title, status message, and help lines.
+func (m Model) bodyHeight() int {
+	h := m.height
+	if m.title != "" || (m.doc != nil && m.doc.Key != "") {
+		h--
+	}
+	if m.message != "" {
+		h--
+	}
+	if m.showHelp {
+		h--
+	}
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+func (m Model) visibleRows() int {
+	rows := m.bodyHeight()
+	if shouldUseColumns(m.width) {
+		rows *= 2
+	}
+	return rows
 }
 
 func (m Model) View() string {
@@ -154,22 +181,43 @@ func (m Model) View() string {
 		sb.WriteString(lipgloss.NewStyle().Faint(true).Render(m.message))
 		sb.WriteString("\n")
 	}
-	top := m.offset
-	bottom := m.offset + m.height
-	if bottom > len(m.lines) {
-		bottom = len(m.lines)
+
+	body := m.body()
+	if shouldUseColumns(m.width) {
+		divider := lipgloss.NewStyle().Faint(true).Render(dividerGlyph)
+		body = layoutColumns(body, m.width, m.bodyHeight(), divider)
+	} else {
+		top := m.offset
+		bottom := m.offset + m.bodyHeight()
+		if bottom > len(m.lines) {
+			bottom = len(m.lines)
+		}
+		if top < len(m.lines) {
+			body = m.lines[top:bottom]
+		}
 	}
-	for i := top; i < bottom; i++ {
-		if i > top {
+	for i, line := range body {
+		if i > 0 {
 			sb.WriteString("\n")
 		}
-		sb.WriteString(m.lines[i])
+		sb.WriteString(line)
 	}
+
 	if m.showHelp {
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · +/- transpose · c convert · q quit"))
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · space/b page · +/- transpose · c convert · q quit"))
 	}
 	return sb.String()
+}
+
+// body returns the rendered lines visible at the current offset. In
+// single-column mode it is the offset window; in two-column mode it is the
+// remaining stream from the offset, which layoutColumns chunks.
+func (m Model) body() []string {
+	if m.offset >= len(m.lines) {
+		return nil
+	}
+	return m.lines[m.offset:]
 }
 
 func (m Model) currentKey() string {

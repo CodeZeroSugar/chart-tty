@@ -40,12 +40,20 @@ rendered chart as plain text instead.
 |-----|--------|
 | `q` / `ctrl+c` | Quit |
 | `j` / `k` or arrows | Scroll down / up |
-| `PgUp` / `PgDn` / space | Page scroll |
+| `space` / `PgDn` | Page down |
+| `b` / `PgUp` | Page up |
 | `g` / `G` or home / end | Jump to top / bottom |
 | `+` / `-` | Transpose up / down |
 | `c` | Convert the loaded chart to ChordPro via AI |
 
 Keys are remappable via config; `c` is not.
+
+### Wide terminals
+
+On terminals wide enough for two 40-character columns (≥83 columns), charts render
+side by side with a vertical break down the center — content fills the left column,
+then continues in the right, like book pages. Narrower terminals use single-column
+left-aligned layout. Overlong lines (wide tab blocks) soft-wrap within their column.
 
 ## Chart formats
 

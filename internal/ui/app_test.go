@@ -34,7 +34,7 @@ func update(t *testing.T, m Model, msg tea.Msg) Model {
 }
 
 func TestModelScroll(t *testing.T) {
-	m := update(t, NewModel(testLines(10), RenderConfig{}), tea.WindowSizeMsg{Width: 20, Height: 4})
+	m := update(t, NewModel(testLines(10), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 20, Height: 4})
 
 	if got := m.View(); !strings.Contains(got, "line0") || !strings.Contains(got, "line3") {
 		t.Errorf("initial view = %q, want lines 0-3", got)
@@ -73,7 +73,7 @@ func TestModelScroll(t *testing.T) {
 }
 
 func TestModelScrollUpClamps(t *testing.T) {
-	m := update(t, NewModel(testLines(5), RenderConfig{}), tea.WindowSizeMsg{Width: 20, Height: 2})
+	m := update(t, NewModel(testLines(5), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 20, Height: 2})
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyUp})
 	if got := m.Offset(); got != 0 {
 		t.Errorf("offset = %d, want 0 (clamp at top)", got)
@@ -93,7 +93,7 @@ func TestModelQuit(t *testing.T) {
 }
 
 func TestModelResize(t *testing.T) {
-	m := update(t, NewModel(testLines(10), RenderConfig{}), tea.WindowSizeMsg{Width: 20, Height: 8})
+	m := update(t, NewModel(testLines(10), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 20, Height: 8})
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyPgDown}) // offset 8, max 2
 	if got := m.Offset(); got != 2 {
 		t.Errorf("offset after resize+pgdown = %d, want 2", got)
@@ -105,6 +105,74 @@ func TestModelResize(t *testing.T) {
 	m = update(t, m, tea.WindowSizeMsg{Width: 20, Height: 1}) // max becomes 9
 	if got := m.Offset(); got != 2 {
 		t.Errorf("offset after further shrink = %d, want unchanged 2", got)
+	}
+}
+
+func TestModelPageUpWithB(t *testing.T) {
+	m := update(t, NewModel(testLines(12), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 20, Height: 4})
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	if got := m.Offset(); got != 8 {
+		t.Fatalf("after G offset = %d, want 8", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+	if got := m.Offset(); got != 4 {
+		t.Errorf("after b offset = %d, want 4", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+	if got := m.Offset(); got != 0 {
+		t.Errorf("after second b offset = %d, want 0", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+	if got := m.Offset(); got != 0 {
+		t.Errorf("after third b offset = %d, want clamp at 0", got)
+	}
+}
+
+func TestModelBodyHeightReservesChromeRows(t *testing.T) {
+	m := update(t, NewModel(testLines(10), RenderConfig{}).SetTitle("Song"), tea.WindowSizeMsg{Width: 40, Height: 6})
+	view := m.View()
+	for _, want := range []string{"Song", "line0", "line2"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view %q missing %q", view, want)
+		}
+	}
+	for _, unwanted := range []string{"line4", "line5"} {
+		if strings.Contains(view, unwanted) {
+			t.Errorf("view %q must not contain %q (chrome reserves rows)", view, unwanted)
+		}
+	}
+}
+
+func TestModelTwoColumnWideView(t *testing.T) {
+	lines := []string{"a", "b", "c", "d", "e", "f"}
+	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 84, Height: 3})
+
+	view := m.View()
+	if !strings.Contains(view, "║") {
+		t.Errorf("wide view %q missing divider", view)
+	}
+	firstRow := strings.Split(view, "\n")[0]
+	parts := strings.Split(firstRow, " ║ ")
+	if len(parts) != 2 {
+		t.Fatalf("first row %q does not split on divider", firstRow)
+	}
+	if !strings.Contains(parts[0], "a") || !strings.Contains(parts[1], "d") {
+		t.Errorf("first row = %q, want a | d flow", firstRow)
+	}
+	lastRow := strings.Split(view, "\n")[len(strings.Split(view, "\n"))-1]
+	if !strings.Contains(lastRow, "c") || !strings.Contains(lastRow, "f") {
+		t.Errorf("last row = %q, want c | f flow", lastRow)
+	}
+}
+
+func TestModelNarrowViewNoDivider(t *testing.T) {
+	m := update(t, NewModel(testLines(6), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 3})
+	if strings.Contains(m.View(), "║") {
+		t.Errorf("narrow view %q must not contain divider", m.View())
 	}
 }
 
