@@ -168,6 +168,12 @@ func extractDirective(directiveLine string) (directive string, data string) {
 
 func getDirectiveCategory(directive string) DirectiveCategory {
 	d := strings.ToLower(directive)
+	// Spec-legal directives chart-tty does not implement are silently
+	// skipped (checked first so e.g. start_of_abc stays ignored rather than
+	// becoming a generic environment).
+	if slices.Contains(Spec.IgnoredDirectives, d) {
+		return CategoryIgnored
+	}
 	// Spec: arbitrary section names are allowed (letters, digits, underscores);
 	// unknown environments are treated as part of the song lyrics.
 	if strings.HasPrefix(d, "start_of_") || strings.HasPrefix(d, "end_of_") {

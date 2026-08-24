@@ -184,8 +184,8 @@ func TestParseSections(t *testing.T) {
 			wantSecs: []Section{},
 		},
 		{
-			name:  "empty environment produces no section",
-			chart: "{soc}\n{eoc}",
+			name:     "empty environment produces no section",
+			chart:    "{soc}\n{eoc}",
 			wantSecs: []Section{},
 		},
 		{
@@ -255,8 +255,8 @@ func TestParseTabBlockGate(t *testing.T) {
 			wantSecs: []Section{},
 		},
 		{
-			name:     "lowercase letters count",
-			chart:    "{sot}\ne|--0--|\nb|--2--|\ng|--2--|\nd|--2--|\n{eot}",
+			name:  "lowercase letters count",
+			chart: "{sot}\ne|--0--|\nb|--2--|\ng|--2--|\nd|--2--|\n{eot}",
 			wantSecs: []Section{
 				{Name: "tab", Lines: []ParsedLine{
 					{Type: LineTypeTab, Raw: "e|--0--|"},
@@ -349,6 +349,26 @@ Four bars of [D]nothing
 	}
 	if !reflect.DeepEqual(doc.Sections, want) {
 		t.Errorf("Sections = %#v, want %#v (arbitrary env names are spec-legal)", doc.Sections, want)
+	}
+}
+
+func TestParseIgnoredDirectivesSkipped(t *testing.T) {
+	chart := `{define: Am base-fret 1 frets x 0 2 2 1 0}
+{new_page}
+{transpose: +2}
+{start_of_chorus}
+Only [G]this renders
+{end_of_chorus}`
+	doc := parseChart(t, chart)
+
+	if len(doc.Sections) != 1 {
+		t.Fatalf("Sections = %#v, want 1 section", doc.Sections)
+	}
+	if len(doc.Sections[0].Lines) != 1 {
+		t.Errorf("Lines = %#v, want only the chorus line", doc.Sections[0].Lines)
+	}
+	if _, exists := doc.Metadata["define"]; exists {
+		t.Error("define leaked into Metadata")
 	}
 }
 

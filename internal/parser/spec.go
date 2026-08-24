@@ -24,6 +24,7 @@ const (
 	CategoryMeta DirectiveCategory = iota
 	CategoryFormatting
 	CategoryEnvironment
+	CategoryIgnored
 	CategoryUnknown
 )
 
@@ -40,4 +41,7 @@ type ChordProSpec struct {
 	MetaDirectives        []string `json:"meta_directives"`
 	FormattingDirectives  []string `json:"formatting_directives"`
 	EnvironmentDirectives []string `json:"environment_directives"`
+	// IgnoredDirectives are spec-legal directives chart-tty does not
+	// implement. They pass validation and are silently skipped at parse time.
+	IgnoredDirectives []string `json:"ignored_directives"`
 }

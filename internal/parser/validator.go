@@ -31,6 +31,11 @@ func (v *Validator) IsValidDirective(k string) bool {
 	if strings.HasPrefix(key, "x_") {
 		return true
 	}
+	// Spec-legal directives chart-tty does not implement pass validation and
+	// are skipped at parse time, so charts using them stay in ChordPro mode.
+	if slices.Contains(Spec.IgnoredDirectives, key) {
+		return true
+	}
 	// Spec: arbitrary section names (letters, digits, underscores) are legal.
 	if strings.HasPrefix(key, "start_of_") || strings.HasPrefix(key, "end_of_") {
 		return true

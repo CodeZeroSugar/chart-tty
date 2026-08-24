@@ -63,6 +63,9 @@ func TestIsValidDirective(t *testing.T) {
 		{"conditional env selector", "start_of_verse-soprano", true},
 		{"arbitrary environment name", "start_of_intro", true},
 		{"arbitrary environment end", "end_of_intro", true},
+		{"ignored spec-legal define", "define", true},
+		{"ignored output directive", "new_page", true},
+		{"ignored font legacy", "textfont", true},
 	}
 
 	for _, tt := range tests {

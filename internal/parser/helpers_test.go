@@ -136,10 +136,10 @@ func TestStripSelector(t *testing.T) {
 
 func TestExtractDirective(t *testing.T) {
 	tests := []struct {
-		name        string
-		line        string
-		wantDir     string
-		wantData    string
+		name     string
+		line     string
+		wantDir  string
+		wantData string
 	}{
 		{"title with space after colon", "{title: Swing Low}", "title", "Swing Low"},
 		{"title without space after colon", "{t:Take Me Home, Country Roads}", "t", "Take Me Home, Country Roads"},
@@ -181,6 +181,9 @@ func TestGetDirectiveCategory(t *testing.T) {
 		{"uppercase meta key", "KEY", CategoryMeta},
 		{"uppercase formatting directive", "Comment", CategoryFormatting},
 		{"uppercase environment directive", "SOC", CategoryEnvironment},
+		{"ignored define", "define", CategoryIgnored},
+		{"delegated env ignored before generic env", "start_of_abc", CategoryIgnored},
+		{"output directive ignored", "new_page", CategoryIgnored},
 	}
 
 	for _, tt := range tests {
@@ -194,11 +197,11 @@ func TestGetDirectiveCategory(t *testing.T) {
 
 func TestParseEnvDirective(t *testing.T) {
 	tests := []struct {
-		name         string
-		directive    string
-		wantAction   string
-		wantEnv      string
-		wantOK       bool
+		name       string
+		directive  string
+		wantAction string
+		wantEnv    string
+		wantOK     bool
 	}{
 		{"start_of full name", "start_of_chorus", "start", "chorus", true},
 		{"start_of verse", "start_of_verse", "start", "verse", true},
