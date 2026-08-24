@@ -34,6 +34,7 @@ func TestBuildPrompt(t *testing.T) {
 		"[*x2]",
 		"[*Repeat intro]",
 		"[*N.C.]",
+		"Environments must be properly matched",
 		"[Fm] [G#] [Eb] [Bb]",
 		"{start_of_verse: Verse 1}",
 		"chord-over-lyrics",

@@ -754,7 +754,11 @@ func (m Model) currentKey() string {
 }
 
 func (m Model) startConversion() (Model, tea.Cmd) {
-	if m.converter == nil || m.rawChart == "" || m.converting {
+	if m.converting {
+		return m, nil
+	}
+	if m.converter == nil || m.rawChart == "" {
+		m.message = "AI conversion not configured"
 		return m, nil
 	}
 	m.converting = true
@@ -770,7 +774,11 @@ func (m Model) startConversion() (Model, tea.Cmd) {
 func (m Model) applyConversion(res aichart.Result, cerr error) Model {
 	m.converting = false
 	if cerr != nil {
-		m.message = "AI conversion failed"
+		msg := cerr.Error()
+		if len(msg) > 120 {
+			msg = msg[:120] + "…"
+		}
+		m.message = "AI conversion failed: " + msg
 		return m
 	}
 	nd, err := parser.NewParser(parser.ModeChordPro).Parse(res.Chart)

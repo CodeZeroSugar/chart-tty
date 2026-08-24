@@ -149,9 +149,14 @@ func main() {
 		rcfg = ui.RenderConfig{}
 	}
 	isTTY := term.IsTerminal(int(os.Stdout.Fd())) && term.IsTerminal(int(os.Stdin.Fd()))
+	aiClient := aichart.FromConfig(appCfg)
 
 	// No chart file: launch straight into the library (interactive only).
 	if len(args) == 0 {
+		if *aiConvertFlag || *writeFlag || *transposeFlag != 0 {
+			fmt.Fprintf(os.Stderr, "Error: --ai-convert/--write/--transpose require a chart file\n")
+			os.Exit(2)
+		}
 		if !isTTY {
 			flag.Usage()
 			os.Exit(2)
@@ -170,7 +175,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer store.Close()
-		m := ui.NewLibraryModel(store, rcfg).SetKeys(appCfg.Keys)
+		m := ui.NewLibraryModel(store, rcfg).SetKeys(appCfg.Keys).SetConverter(&aiClient)
 		if err := ui.RunModel(m); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: TUI failed: %v\n", err)
 			os.Exit(1)
@@ -178,10 +183,6 @@ func main() {
 		return
 	}
 
-	if *aiConvertFlag || *writeFlag || *transposeFlag != 0 {
-		fmt.Fprintf(os.Stderr, "Error: --ai-convert/--write/--transpose require a chart file\n")
-		os.Exit(2)
-	}
 	absPath, err := filepath.Abs(args[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to resolve path %q: %v\n", args[0], err)
@@ -195,12 +196,9 @@ func main() {
 	chart := string(bytes)
 	originalChart := chart
 
-	var converter *aichart.Client
 	if *aiConvertFlag {
-		cl := aichart.FromConfig(appCfg)
-		converter = &cl
-		status := newStatusLine("sending chart to " + cl.Model)
-		res, cerr := cl.ConvertProgress(chart, func(e aichart.ProgressEvent) {
+		status := newStatusLine("sending chart to " + aiClient.Model)
+		res, cerr := aiClient.ConvertProgress(chart, func(e aichart.ProgressEvent) {
 			status.update(e.Message)
 		})
 		if cerr != nil {
@@ -259,9 +257,7 @@ func main() {
 		defer store.Close()
 
 		m := ui.NewDocModel(doc, rcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys).SetStore(store).SetSource(originalChart)
-		if converter != nil {
-			m = m.SetConverter(converter)
-		}
+		m = m.SetConverter(&aiClient)
 		if err := ui.RunModel(m); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: TUI failed: %v\n", err)
 			os.Exit(1)

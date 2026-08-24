@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -660,7 +661,7 @@ func TestModelConvertNoDoubleStart(t *testing.T) {
 	}
 }
 
-func TestModelConvertWithoutConverterNoop(t *testing.T) {
+func TestModelConvertNotConfiguredMessage(t *testing.T) {
 	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
 	nm, cmd := NewDocModel(doc, RenderConfig{}).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 	m, ok := nm.(Model)
@@ -670,7 +671,22 @@ func TestModelConvertWithoutConverterNoop(t *testing.T) {
 	if cmd != nil {
 		t.Error("c without converter must not return a cmd")
 	}
-	if strings.Contains(m.View(), "converting") {
-		t.Errorf("view %q should not mention converting without a converter", m.View())
+	if !strings.Contains(m.View(), "AI conversion not configured") {
+		t.Errorf("view %q should explain that conversion is not configured", m.View())
+	}
+	if strings.Contains(m.View(), "converting…") {
+		t.Errorf("view %q should not claim to be converting", m.View())
+	}
+}
+
+func TestConvertFailureShowsErrorDetail(t *testing.T) {
+	s := testStore(t)
+	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 40, Height: 10})
+
+	m = update(t, m, convertDoneMsg{err: errors.New("gateway exploded")})
+	view := m.View()
+	if !strings.Contains(view, "AI conversion failed: gateway exploded") {
+		t.Errorf("view %q missing failure detail", view)
 	}
 }

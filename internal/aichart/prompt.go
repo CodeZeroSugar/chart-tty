@@ -17,6 +17,9 @@ Output discipline:
 - Never truncate the song. Output the complete chart from first line to last.
 - Preserve the original lyrics and chord names exactly; never drop or invent content.
 - Directives must be alone on their own line.
+- Environments must be properly matched: every {start_of_X} needs exactly one {end_of_X}
+  of the same X before anything else opens, and never emit {end_of_X} unless that X is
+  currently open. When in doubt, wrap each section in its own matched pair.
 - Use only these environment types: verse, chorus, bridge, tab, grid.
 - Non-chord bracket content must be escaped with a leading asterisk: [*N.C.], [*----].
 
