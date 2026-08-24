@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
@@ -19,6 +21,7 @@ const (
 	screenViewChart screen = iota
 	screenBrowseCharts
 	screenBrowseSetlists
+	screenPickSetlist
 	screenViewSetlist
 )
 
@@ -47,11 +50,19 @@ type Model struct {
 	browseCursor  int
 	setlists      []db.SetlistMeta
 	setlistCursor int
+	inputMode     bool
+	nameInput     textinput.Model
 	setlist       struct {
 		name   string
-		charts []db.StoredChart
+		charts []setlistChartView
 		index  int
 	}
+}
+
+// setlistChartView is one chart inside an open setlist, pre-rendered.
+type setlistChartView struct {
+	title string
+	lines []string
 }
 
 type convertDoneMsg struct {
@@ -122,17 +133,158 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		}
-		return m.updateScreen(k)
+		return m.updateScreen(msg)
 	}
 	m.clampOffset()
 	return m, nil
 }
 
-func (m Model) updateScreen(k string) (tea.Model, tea.Cmd) {
-	if m.screen == screenBrowseCharts {
-		return m.updateBrowseChartsKeys(k)
+func (m Model) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, isKey := msg.(tea.KeyMsg)
+	if !isKey {
+		return m, nil
 	}
-	return m.updateViewChartKeys(k)
+	// Typed input (new setlist name) captures everything while active.
+	if m.inputMode {
+		return m.updateNameInput(msg)
+	}
+	k := key.String()
+	println("DBG route k=", k, "screen=", int(m.screen))
+
+	switch m.screen {
+	case screenBrowseCharts:
+		return m.updateBrowseChartsKeys(k)
+	case screenBrowseSetlists:
+		return m.updateBrowseSetlistsKeys(k)
+	case screenPickSetlist:
+		return m.updatePickSetlistKeys(k)
+	case screenViewSetlist:
+		return m.updateViewSetlistKeys(k)
+	default:
+		return m.updateViewChartKeys(k)
+	}
+}
+
+func (m Model) updateNameInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+	km := msg.(tea.KeyMsg)
+	switch km.String() {
+	case "esc":
+		m.inputMode = false
+		m.nameInput.Blur()
+		return m, nil
+	case "enter":
+		name := strings.TrimSpace(m.nameInput.Value())
+		m.inputMode = false
+		m.nameInput.Blur()
+		if name == "" {
+			m.message = "setlist name required"
+			return m, nil
+		}
+		if _, err := m.store.CreateSetlist(name); err != nil {
+			if errors.Is(err, db.ErrExists) {
+				m.message = "setlist name already exists"
+				return m, nil
+			}
+			m.message = fmt.Sprintf("create failed: %v", err)
+			return m, nil
+		}
+		m.refreshSetlists()
+		return m, nil
+	}
+	nm, cmd := m.nameInput.Update(msg)
+	m.nameInput = nm
+	return m, cmd
+}
+
+func (m *Model) refreshSetlists() {
+	if lists, err := m.store.ListSetlists(); err == nil {
+		m.setlists = lists
+		m.setlistCursor = 0
+	}
+}
+
+func (m Model) openSetlistBrowser() (tea.Model, tea.Cmd) {
+	if m.store == nil {
+		m.message = "no library open"
+		return m, nil
+	}
+	m.refreshSetlists()
+	ti := textinput.New()
+	ti.Placeholder = "setlist name"
+	ti.CharLimit = 60
+	m.nameInput = ti
+	m.screen = screenBrowseSetlists
+	return m, nil
+}
+
+func (m Model) updateBrowseSetlistsKeys(k string) (tea.Model, tea.Cmd) {
+	switch k {
+	case "down", "j":
+		if m.setlistCursor < len(m.setlists)-1 {
+			m.setlistCursor++
+		}
+	case "up", "k":
+		if m.setlistCursor > 0 {
+			m.setlistCursor--
+		}
+	case "n":
+		m.inputMode = true
+		m.nameInput.SetValue("")
+		return m, m.nameInput.Focus()
+	case "enter":
+		if len(m.setlists) > 0 {
+			sl := m.setlists[m.setlistCursor]
+			charts, err := m.store.SetlistCharts(sl.ID)
+			if err != nil {
+				m.message = fmt.Sprintf("library error: %v", err)
+				return m, nil
+			}
+			views := make([]setlistChartView, len(charts))
+			for i, c := range charts {
+				doc, perr := parseStored(c.Content)
+				if perr != nil {
+					views[i] = setlistChartView{title: c.Title, lines: []string{"(unparsable chart)"}}
+					continue
+				}
+				views[i] = setlistChartView{title: doc.Title, lines: Render(doc, m.cfg)}
+			}
+			m.setlist.name = sl.Name
+			m.setlist.charts = views
+			m.setlist.index = 0
+			m.offset = 0
+			m.screen = screenViewSetlist
+		}
+	case "esc":
+		m.screen = screenViewChart
+	}
+	return m, nil
+}
+
+func (m Model) updatePickSetlistKeys(k string) (tea.Model, tea.Cmd) {
+	switch k {
+	case "down", "j":
+		if m.setlistCursor < len(m.setlists)-1 {
+			m.setlistCursor++
+		}
+	case "up", "k":
+		if m.setlistCursor > 0 {
+			m.setlistCursor--
+		}
+	case "enter":
+		if len(m.setlists) > 0 && len(m.browseCharts) > 0 {
+			chartID := m.browseCharts[m.browseCursor].ID
+			sl := m.setlists[m.setlistCursor]
+			if err := m.store.AppendSetlistItem(sl.ID, chartID); err != nil {
+				m.message = fmt.Sprintf("add failed: %v", err)
+				return m, nil
+			}
+			m.message = fmt.Sprintf("added to %s", sl.Name)
+			m.screen = screenBrowseCharts
+		}
+	case "esc":
+		m.screen = screenBrowseCharts
+	}
+	return m, nil
 }
 
 func (m Model) updateBrowseChartsKeys(k string) (tea.Model, tea.Cmd) {
@@ -149,10 +301,90 @@ func (m Model) updateBrowseChartsKeys(k string) (tea.Model, tea.Cmd) {
 		if len(m.browseCharts) > 0 {
 			return m.openStoredChart(m.browseCharts[m.browseCursor].ID)
 		}
+	case "s":
+		if m.store == nil {
+			return m, nil
+		}
+		m.refreshSetlists()
+		m.setlistCursor = 0
+		if len(m.setlists) == 0 {
+			ti := textinput.New()
+			ti.Placeholder = "setlist name"
+			ti.CharLimit = 60
+			m.nameInput = ti
+			m.inputMode = true
+			return m, m.nameInput.Focus()
+		}
+		m.screen = screenPickSetlist
 	case "esc":
 		m.screen = screenViewChart
 	}
 	return m, nil
+}
+
+func (m Model) updateViewSetlistKeys(k string) (tea.Model, tea.Cmd) {
+	n := len(m.setlist.charts)
+	if n == 0 {
+		if k == "esc" {
+			m.screen = screenViewChart
+		}
+		return m, nil
+	}
+	maxOff := m.setlistMaxOff()
+
+	switch k {
+	case "down", "j":
+		if m.offset < maxOff {
+			m.offset++
+		} else if m.setlist.index < n-1 {
+			m.setlist.index++
+			m.offset = 0
+		}
+	case "up", "k":
+		if m.offset > 0 {
+			m.offset--
+		} else if m.setlist.index > 0 {
+			m.setlist.index--
+			m.offset = max(0, len(m.setlist.charts[m.setlist.index].lines)-m.bodyHeight())
+		}
+	case "pgdown", " ":
+		if m.offset < maxOff {
+			m.offset += max(m.bodyHeight(), 1)
+			if m.offset > maxOff {
+				m.offset = maxOff
+			}
+		} else if m.setlist.index < n-1 {
+			m.setlist.index++
+			m.offset = 0
+		}
+	case "pgup", "b":
+		if m.offset > 0 {
+			m.offset -= max(m.bodyHeight(), 1)
+			if m.offset < 0 {
+				m.offset = 0
+			}
+		} else if m.setlist.index > 0 {
+			m.setlist.index--
+			m.offset = max(0, len(m.setlist.charts[m.setlist.index].lines)-m.bodyHeight())
+		}
+	case "home", "g":
+		m.setlist.index = 0
+		m.offset = 0
+	case "end", "G":
+		m.setlist.index = n - 1
+		m.offset = max(0, len(m.setlist.charts[n-1].lines)-m.bodyHeight())
+	case "esc":
+		return m.openSetlistBrowser()
+	}
+	return m, nil
+}
+
+// setlistMaxOff is the maximum scroll offset of the currently open setlist chart.
+func (m Model) setlistMaxOff() int {
+	if m.setlist.index >= len(m.setlist.charts) {
+		return 0
+	}
+	return max(0, len(m.setlist.charts[m.setlist.index].lines)-m.bodyHeight())
 }
 
 // openLibraryBrowser switches to the chart library listing.
@@ -214,6 +446,8 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 		}
 	case k == "L":
 		return m.openLibraryBrowser()
+	case k == "S":
+		return m.openSetlistBrowser()
 	case k == "pgup" || k == "b":
 		m.offset -= max(m.bodyHeight(), 1)
 	case k == "pgdown" || k == " ":
@@ -290,8 +524,13 @@ func (m Model) visibleRows() int {
 }
 
 func (m Model) View() string {
-	if m.screen == screenBrowseCharts {
+	switch m.screen {
+	case screenBrowseCharts:
 		return m.viewBrowseCharts()
+	case screenBrowseSetlists, screenPickSetlist:
+		return m.viewBrowseSetlists(m.screen == screenPickSetlist)
+	case screenViewSetlist:
+		return m.viewSetlist()
 	}
 	var sb strings.Builder
 	title := m.title
@@ -384,6 +623,89 @@ func parseStored(content string) (*parser.Document, error) {
 		}
 	}
 	return parser.NewParser(mode).Parse(content)
+}
+
+// viewBrowseSetlists renders the setlist listing (or the pick-setlist
+// variant used when adding the browsed chart to a setlist).
+func (m Model) viewBrowseSetlists(picking bool) string {
+	var sb strings.Builder
+	header := "Setlists"
+	if picking {
+		header = "Add \"" + m.browseCharts[m.browseCursor].Title + "\" to:"
+	}
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Render(header))
+	sb.WriteString("\n\n")
+
+	if m.inputMode {
+		sb.WriteString("New setlist: " + m.nameInput.View() + "\n")
+		return sb.String()
+	}
+
+	if len(m.setlists) == 0 {
+		sb.WriteString("(no setlists — press n to create one)")
+		return sb.String()
+	}
+
+	bodyHeight := m.bodyHeight() - 2
+	start := max(m.setlistCursor-bodyHeight+1, 0)
+	end := min(start+bodyHeight, len(m.setlists))
+
+	for i := start; i < end; i++ {
+		sl := m.setlists[i]
+		marker, style := "  ", lipgloss.NewStyle().Faint(true)
+		if i == m.setlistCursor {
+			marker, style = "> ", lipgloss.NewStyle().Bold(true)
+		}
+		sb.WriteString(marker + style.Render(sl.Name))
+		sb.WriteString("\n")
+	}
+	hint := "j/k move · enter open · n new · esc back"
+	if picking {
+		hint = "j/k choose · enter add · esc cancel"
+	}
+	sb.WriteString("\n")
+	sb.WriteString(lipgloss.NewStyle().Faint(true).Render(hint))
+	return sb.String()
+}
+
+// viewSetlist renders the current chart of an open setlist.
+func (m Model) viewSetlist() string {
+	var sb strings.Builder
+
+	name := m.setlist.name
+	pos := fmt.Sprintf("%d/%d", m.setlist.index+1, len(m.setlist.charts))
+	curTitle := ""
+	keySuffix := ""
+	if k := m.currentKey(); k != "" {
+		keySuffix = " · Key: " + k
+	}
+	if m.setlist.index < len(m.setlist.charts) {
+		curTitle = m.setlist.charts[m.setlist.index].title
+	}
+	header := fmt.Sprintf("%s ─ chart %s ─ %s%s", name, pos, curTitle, keySuffix)
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Render(strings.TrimPrefix(strings.TrimRight(header, " "), "─ ")))
+	sb.WriteString("\n")
+
+	if m.message != "" {
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render(m.message))
+		sb.WriteString("\n")
+	}
+
+	if m.setlist.index < len(m.setlist.charts) {
+		lines := m.setlist.charts[m.setlist.index].lines
+		top := m.offset
+		bottom := min(top+m.bodyHeight(), len(lines))
+		for i := top; i < bottom; i++ {
+			sb.WriteString(lines[i])
+			sb.WriteString("\n")
+		}
+	}
+
+	help := "j/k scroll · space/b next/prev chart · esc back"
+	if m.showHelp {
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render(help))
+	}
+	return sb.String()
 }
 
 // body returns the rendered lines visible at the current offset. In
@@ -491,6 +813,8 @@ func (m Model) Screen() string {
 		return "browseCharts"
 	case screenBrowseSetlists:
 		return "browseSetlists"
+	case screenPickSetlist:
+		return "pickSetlist"
 	case screenViewSetlist:
 		return "viewSetlist"
 	default:

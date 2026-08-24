@@ -472,6 +472,100 @@ func TestSaveConvertedChart(t *testing.T) {
 	}
 }
 
+func TestSetlistCreateAndBrowse(t *testing.T) {
+	s := testStore(t)
+	_, _ = s.AddChart("A", "", "import", "{title: A}\nx")
+
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
+	if got := m.Screen(); got != "browseSetlists" {
+		t.Fatalf("screen = %q, want browseSetlists", got)
+	}
+	if !strings.Contains(m.View(), "no setlists") {
+		t.Errorf("view %q missing empty hint", m.View())
+	}
+
+	// Create via typed input.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	for _, r := range "Gig" {
+		m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(string(r))})
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	lists, _ := s.ListSetlists()
+	if len(lists) != 1 || lists[0].Name != "Gig" {
+		t.Fatalf("setlists = %#v, want [Gig]", lists)
+	}
+	view := m.View()
+	if !strings.Contains(view, "Gig") || strings.Contains(view, "New setlist:") {
+		t.Errorf("post-create view = %q (input should be closed)", view)
+	}
+}
+
+func TestAddToSetlistFromBrowser(t *testing.T) {
+	s := testStore(t)
+	_, _ = s.AddChart("The Chart", "", "import", "{title: The Chart}\n[C]x")
+	slID, _ := s.CreateSetlist("Worship")
+	_ = slID
+
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+
+	if got := m.Screen(); got != "pickSetlist" {
+		t.Fatalf("screen = %q, want pickSetlist", got)
+	}
+	if !strings.Contains(m.View(), `Add "The Chart" to:`) {
+		t.Errorf("pick view = %q", m.View())
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	items, err := s.SetlistCharts(slID)
+	if err != nil || len(items) != 1 || items[0].Title != "The Chart" {
+		t.Fatalf("setlist items = %#v err=%v", items, err)
+	}
+	if got := m.Screen(); got != "browseCharts" {
+		t.Errorf("screen after add = %q, want browseCharts", got)
+	}
+}
+
+func TestSetlistSequentialPaging(t *testing.T) {
+	s := testStore(t)
+	id1, _ := s.AddChart("Song One", "", "import", "{title: Song One}\n"+strings.Repeat("line one\n", 8))
+	id2, _ := s.AddChart("Song Two", "", "import", "{title: Song Two}\nline two A\nline two B")
+	slID, _ := s.CreateSetlist("Service")
+	_ = s.AppendSetlistItem(slID, id1)
+	_ = s.AppendSetlistItem(slID, id2)
+
+	m := update(t, NewModel(nil, RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 40, Height: 6})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // open "Service"
+
+	if got := m.Screen(); got != "viewSetlist" {
+		t.Fatalf("screen = %q, want viewSetlist", got)
+	}
+	view := m.View()
+	if !strings.Contains(view, "chart 1/2") || !strings.Contains(view, "Song One") {
+		t.Errorf("first-chart view = %q", view)
+	}
+
+	// Page down through song one's pages; must land on song two top.
+	for i := 0; i < 12 && !strings.Contains(m.View(), "chart 2/2"); i++ {
+		m = update(t, m, tea.KeyMsg{Type: tea.KeyPgDown})
+	}
+	if got := m.View(); !strings.Contains(got, "chart 2/2") || !strings.Contains(got, "line two B") {
+		t.Errorf("after paging view = %q", got)
+	}
+
+	// Page up past the top of song two returns to song one bottom.
+	for i := 0; i < 12 && !strings.Contains(m.View(), "chart 1/2"); i++ {
+		m = update(t, m, tea.KeyMsg{Type: tea.KeyPgUp})
+	}
+	if got := m.View(); !strings.Contains(got, "chart 1/2") {
+		t.Errorf("after back-paging view = %q", got)
+	}
+}
+
 func TestLibraryNoStoreShowsMessage(t *testing.T) {
 	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetShowHelp(true), tea.WindowSizeMsg{Width: 40, Height: 10})
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
