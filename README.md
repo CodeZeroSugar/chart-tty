@@ -52,8 +52,10 @@ Keys are remappable via config; `c` is not.
 
 On terminals wide enough for two 40-character columns (≥83 columns), charts render
 side by side with a vertical break down the center — content fills the left column,
-then continues in the right, like book pages. Narrower terminals use single-column
-left-aligned layout. Overlong lines (wide tab blocks) soft-wrap within their column.
+then continues in the right, like book pages. The split only kicks in when content
+exceeds one full page; shorter charts stay single-column. Narrower terminals use
+single-column left-aligned layout. Overlong lines (wide tab blocks) soft-wrap within
+their column.
 
 ## Chart formats
 

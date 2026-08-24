@@ -97,7 +97,8 @@ func TestLayoutColumnsFlowOrder(t *testing.T) {
 }
 
 func TestLayoutColumnsDividerOnEveryRow(t *testing.T) {
-	got := layoutColumns([]string{"only one line"}, 83, 4, dividerGlyph)
+	lines := []string{"l1", "l2", "l3", "l4", "r1", "r2"}
+	got := layoutColumns(lines, 83, 4, dividerGlyph)
 	if len(got) != 4 {
 		t.Fatalf("rows = %d, want 4", len(got))
 	}
@@ -106,8 +107,22 @@ func TestLayoutColumnsDividerOnEveryRow(t *testing.T) {
 			t.Errorf("row %d = %q missing divider (frame must stay complete)", i, row)
 		}
 	}
-	if !strings.Contains(got[0], "only one line") {
-		t.Errorf("row 0 = %q missing content", got[0])
+	checks := []struct{ left, right string }{{"l1", "r1"}, {"l2", "r2"}, {"l3", ""}, {"l4", ""}}
+	for i, want := range checks {
+		parts := strings.SplitN(got[i], " ║ ", 2)
+		if len(parts) != 2 {
+			t.Fatalf("row %d = %q does not split on divider", i, got[i])
+		}
+		if !strings.Contains(parts[0], want.left) {
+			t.Errorf("row %d left = %q, want it to contain %q", i, parts[0], want.left)
+		}
+		if want.right == "" {
+			if strings.TrimSpace(parts[1]) != "" {
+				t.Errorf("row %d right = %q, want blank filler", i, parts[1])
+			}
+		} else if !strings.Contains(parts[1], want.right) {
+			t.Errorf("row %d right = %q, want it to contain %q", i, parts[1], want.right)
+		}
 	}
 }
 
@@ -129,10 +144,45 @@ func TestLayoutColumnsPadsToEqualWidth(t *testing.T) {
 
 func TestLayoutColumnsWrapsLongLines(t *testing.T) {
 	tab := "E|---3-3-4-4|---8-8-6-6|-------3-3-4-4"
-	got := layoutColumns([]string{tab}, 83, 3, dividerGlyph)
+	lines := append([]string{tab}, []string{"a", "b", "c", "d"}...)
+	got := layoutColumns(lines, 83, 3, dividerGlyph)
 	joined := strings.Join(got, "\n")
-	if !strings.Contains(joined, "E|---3-3-4-") || !strings.Contains(joined, "4|---8-8-6-") {
+	if !strings.Contains(joined, "E|---3-3-4") || !strings.Contains(joined, "-4|---8-8-") {
 		t.Errorf("wrapped tab content lost:\n%s", joined)
+	}
+}
+
+func TestLayoutColumnsStyledLinesKeepDividerAligned(t *testing.T) {
+	styled := "\x1b[36;1m[chorus]\x1b[0m" // 7 printable cells, 17 runes
+	lines := []string{"plain lyric line here", styled, "another plain line", "more content", "even more", "last line"}
+	got := layoutColumns(lines, 83, 3, dividerGlyph)
+
+	first := -1
+	for i, row := range got {
+		d := strings.Index(row, dividerGlyph)
+		if d < 0 {
+			t.Fatalf("row %d = %q missing divider", i, row)
+		}
+		// The divider must sit at the same DISPLAY column on every row —
+		// styled rows carry invisible escape runes, so compare cells, not runes.
+		w := displayWidth(row[:d])
+		if first < 0 {
+			first = w
+			continue
+		}
+		if w != first {
+			t.Errorf("row %d divider at display column %d, want %d (styled row shifted it)\nrow: %q", i, w, first, row)
+		}
+	}
+	if !strings.Contains(got[1], styled) {
+		t.Errorf("styled line lost its escape codes:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+func TestLayoutColumnsShortContentStaysSingle(t *testing.T) {
+	lines := []string{"a", "b", "c"}
+	if got := layoutColumns(lines, 83, 3, dividerGlyph); got != nil {
+		t.Errorf("content fitting one column must not split, got %#v", got)
 	}
 }
 

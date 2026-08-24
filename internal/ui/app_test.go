@@ -176,6 +176,16 @@ func TestModelNarrowViewNoDivider(t *testing.T) {
 	}
 }
 
+func TestModelWideButShortStaysSingleColumn(t *testing.T) {
+	m := update(t, NewModel(testLines(4), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 100, Height: 6})
+	if m.useColumns() {
+		t.Error("content fitting one column must not activate two-column layout")
+	}
+	if strings.Contains(m.View(), "║") {
+		t.Errorf("view %q must not contain divider for short content", m.View())
+	}
+}
+
 func TestModelViewTitleAndHelp(t *testing.T) {
 	m := update(t, NewModel(testLines(3), RenderConfig{}).SetTitle("Swing Low"), tea.WindowSizeMsg{Width: 40, Height: 10})
 

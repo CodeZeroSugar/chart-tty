@@ -159,9 +159,22 @@ func (m Model) bodyHeight() int {
 	return h
 }
 
+// useColumns reports whether the body should render side by side: the
+// terminal must be wide enough AND the content must exceed a single column
+// page. This is the single source of truth for layout mode — View and
+// clampOffset both derive from it so they can never disagree.
+func (m Model) useColumns() bool {
+	if !shouldUseColumns(m.width) {
+		return false
+	}
+	colWidth := (m.width - columnGap) / 2
+	rows := expandRows(m.body(), colWidth)
+	return len(rows) > m.bodyHeight()
+}
+
 func (m Model) visibleRows() int {
 	rows := m.bodyHeight()
-	if shouldUseColumns(m.width) {
+	if m.useColumns() {
 		rows *= 2
 	}
 	return rows
@@ -182,11 +195,12 @@ func (m Model) View() string {
 		sb.WriteString("\n")
 	}
 
-	body := m.body()
-	if shouldUseColumns(m.width) {
+	var body []string
+	if m.useColumns() {
 		divider := lipgloss.NewStyle().Faint(true).Render(dividerGlyph)
-		body = layoutColumns(body, m.width, m.bodyHeight(), divider)
-	} else {
+		body = layoutColumns(m.body(), m.width, m.bodyHeight(), divider)
+	}
+	if body == nil {
 		top := m.offset
 		bottom := m.offset + m.bodyHeight()
 		if bottom > len(m.lines) {
