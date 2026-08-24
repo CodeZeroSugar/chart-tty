@@ -44,9 +44,30 @@ rendered chart as plain text instead.
 | `b` / `PgUp` | Page up |
 | `g` / `G` or home / end | Jump to top / bottom |
 | `+` / `-` | Transpose up / down |
+| `i` | Import the loaded chart into the library |
+| `L` / `S` | Browse the chart library / setlists |
 | `c` | Convert the loaded chart to ChordPro via AI |
 
 Keys are remappable via config; `c` is not.
+
+### Library and setlists
+
+`chart-tty` stores charts in a local SQLite library
+(`$XDG_DATA_HOME/chart-tty/library.db`, overridable via `[library] path` in config).
+From the TUI:
+
+- **`i`** imports the loaded chart; **`s`** after an AI conversion saves the converted
+  version (source tagged `ai`).
+- **`L`** opens the library browser — pick any stored chart with j/k + enter.
+- **`S`** opens setlists: `n` creates one (typed name), enter opens it.
+- Inside a setlist, paging past the end of a chart continues to the next chart
+  (and back-paging returns to the previous one) — built for live playback.
+
+Charts can also be imported from the CLI:
+
+```sh
+chart-tty --import path/to/song.pro
+```
 
 ### Wide terminals
 
@@ -175,6 +196,9 @@ scroll_down = "j"
 scroll_up = "k"
 transpose_up = "+"
 transpose_down = "-"
+
+[library]
+# path = "/somewhere/library.db"   # default: ~/.local/share/chart-tty/library.db
 
 [ai]
 base_url = "https://api.openai.com/v1"

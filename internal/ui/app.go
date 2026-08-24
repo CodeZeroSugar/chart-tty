@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
@@ -570,7 +570,7 @@ func (m Model) View() string {
 
 	if m.showHelp {
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · space/b page · +/- transpose · c convert · q quit"))
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · space/b page · +/- transpose · i save · L library · S setlists · c convert · q quit"))
 	}
 	return sb.String()
 }

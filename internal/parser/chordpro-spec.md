@@ -173,4 +173,5 @@ Deliberate deviations and enforcement choices compared to the spec above:
   `internal/parser/spec.json` → `ignored_directives`.
 - **Ignored per spec mandate**: `x_*` custom directives — completely ignored, no warning.
 - **Never emitted by the AI converter**: see the never-emit list in
-  `internal/aichart/prompt.go`.
+  `internal/aichart/prompt.go`. The AI converter's system prompt embeds sections 1, 2 and 4
+  of this file plus conversion rules (gateway constrains prompt size; see LESSONS.md).
