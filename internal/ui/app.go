@@ -39,6 +39,8 @@ type Model struct {
 	message    string
 	converting bool
 
+	lastConverted string
+
 	screen        screen
 	store         *db.Store
 	browseCharts  []db.ChartMeta
@@ -73,9 +75,15 @@ func (m Model) SetKeys(keys config.KeyConfig) Model {
 	return m
 }
 
-func (m Model) SetConverter(rawChart string, client *aichart.Client) Model {
-	m.rawChart = rawChart
+func (m Model) SetConverter(client *aichart.Client) Model {
 	m.converter = client
+	return m
+}
+
+// SetSource stores the raw original chart text so it can be imported into
+// the library.
+func (m Model) SetSource(raw string) Model {
+	m.rawChart = raw
 	return m
 }
 
@@ -217,6 +225,12 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 	case k == "c":
 		nm, cmd := m.startConversion()
 		return nm, cmd
+	case k == "i":
+		m = m.importCurrentChart()
+		return m, nil
+	case k == "s":
+		m = m.saveConvertedChart()
+		return m, nil
 	}
 	m.clampOffset()
 	return m, nil
@@ -423,7 +437,44 @@ func (m Model) applyConversion(res aichart.Result, cerr error) Model {
 	m.transpose = 0
 	m.lines = Render(nd, m.cfg)
 	m.offset = 0
-	m.message = "converted"
+	m.lastConverted = res.Chart
+	m.message = "converted · s: save to library"
+	return m
+}
+
+// importCurrentChart stores the loaded chart's original text in the library.
+func (m Model) importCurrentChart() Model {
+	if m.store == nil || m.rawChart == "" {
+		m.message = "nothing to import"
+		return m
+	}
+	title, artist := "", ""
+	if m.doc != nil {
+		title, artist = m.doc.Title, m.doc.Artist
+	}
+	if _, err := m.store.AddChart(title, artist, "import", m.rawChart); err != nil {
+		m.message = fmt.Sprintf("import failed: %v", err)
+		return m
+	}
+	m.message = "imported to library"
+	return m
+}
+
+// saveConvertedChart stores the most recent AI conversion in the library.
+func (m Model) saveConvertedChart() Model {
+	if m.store == nil || m.lastConverted == "" {
+		m.message = "no conversion to save"
+		return m
+	}
+	title, artist := "", ""
+	if m.doc != nil {
+		title, artist = m.doc.Title, m.doc.Artist
+	}
+	if _, err := m.store.AddChart(title, artist, "ai", m.lastConverted); err != nil {
+		m.message = fmt.Sprintf("save failed: %v", err)
+		return m
+	}
+	m.message = "saved to library"
 	return m
 }
 

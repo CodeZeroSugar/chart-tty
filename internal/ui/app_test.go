@@ -404,6 +404,74 @@ func TestLibraryBrowserEmpty(t *testing.T) {
 	}
 }
 
+func TestImportCurrentChart(t *testing.T) {
+	s := testStore(t)
+	doc := &parser.Document{
+		Title:    "My Song",
+		Artist:   "Me",
+		Metadata: map[string][]string{},
+	}
+	raw := "{title: My Song}\n[C]body"
+
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false).SetSource(raw).SetStore(s), tea.WindowSizeMsg{Width: 40, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+
+	if !strings.Contains(m.View(), "imported to library") {
+		t.Errorf("view %q missing import confirmation", m.View())
+	}
+	charts, err := s.ListCharts()
+	if err != nil || len(charts) != 1 {
+		t.Fatalf("library charts = %#v err=%v, want 1", charts, err)
+	}
+	if charts[0].Title != "My Song" || charts[0].Source != "import" {
+		t.Errorf("stored meta = %#v", charts[0])
+	}
+
+	// No source set -> nothing to import.
+	m2 := update(t, NewModel(testLines(2), RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 40, Height: 10})
+	m2 = update(t, m2, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+	if !strings.Contains(m2.View(), "nothing to import") {
+		t.Errorf("view %q missing nothing-to-import message", m2.View())
+	}
+}
+
+func TestSaveConvertedChart(t *testing.T) {
+	s := testStore(t)
+	converted := "{title: Converted}\n[C]x"
+	doc := &parser.Document{
+		Title:    "Converted",
+		Artist:   "AI",
+		Metadata: map[string][]string{},
+	}
+
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 40, Height: 10})
+	m = update(t, m, convertDoneMsg{result: aichart.Result{Chart: converted, Attempts: 1}})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+
+	if !strings.Contains(m.View(), "saved to library") {
+		t.Errorf("view %q missing saved confirmation", m.View())
+	}
+	charts, err := s.ListCharts()
+	if err != nil || len(charts) != 1 {
+		t.Fatalf("library charts = %#v err=%v, want 1", charts, err)
+	}
+	if charts[0].Source != "ai" {
+		t.Errorf("source = %q, want ai", charts[0].Source)
+	}
+	stored, _ := s.GetChart(charts[0].ID)
+	if stored.Content != converted {
+		t.Errorf("stored content = %q, want converted chart", stored.Content)
+	}
+
+	// Pressing s again with no NEW conversion must not duplicate the row.
+	m = update(t, m, convertDoneMsg{result: aichart.Result{Chart: converted, Attempts: 1}})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	charts, _ = s.ListCharts()
+	if len(charts) != 2 {
+		t.Errorf("charts = %d, want 2 (second conversion saves again by design)", len(charts))
+	}
+}
+
 func TestLibraryNoStoreShowsMessage(t *testing.T) {
 	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetShowHelp(true), tea.WindowSizeMsg{Width: 40, Height: 10})
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
@@ -438,7 +506,7 @@ func TestModelConvertKey(t *testing.T) {
 			},
 		},
 	}
-	m := update(t, NewDocModel(doc, RenderConfig{}).SetConverter("C G", client), tea.WindowSizeMsg{Width: 40, Height: 10})
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetSource("C G").SetConverter(client), tea.WindowSizeMsg{Width: 40, Height: 10})
 
 	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 	m2, ok := nm.(Model)
@@ -483,7 +551,7 @@ func TestModelConvertNoDoubleStart(t *testing.T) {
 	client := &aichart.Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
 
 	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
-	m := NewDocModel(doc, RenderConfig{}).SetConverter("raw", client)
+	m := NewDocModel(doc, RenderConfig{}).SetSource("raw").SetConverter(client)
 
 	m2, cmd := m.startConversion()
 	if cmd == nil || !m2.converting {

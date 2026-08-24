@@ -25,6 +25,56 @@ func usage() {
 	flag.PrintDefaults()
 }
 
+// runImport imports a chart file into the library and prints the result.
+func runImport(configFlag, importPath string) {
+	cfgPath := configFlag
+	if cfgPath == "" {
+		var err error
+		cfgPath, err = config.DefaultPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	libPath := ""
+	if appCfg, err := config.Load(cfgPath); err == nil {
+		libPath = appCfg.Library.Path
+	}
+	if libPath == "" {
+		var err error
+		libPath, err = db.DefaultPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	store, err := db.Open(libPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: opening library: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	content, err := os.ReadFile(importPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: unable to read file: %v\n", err)
+		os.Exit(1)
+	}
+
+	doc, perr := parser.NewParser(parser.ModeChordPro).Parse(string(content))
+	title, artist := "", ""
+	if perr == nil {
+		title, artist = doc.Title, doc.Artist
+	}
+	id, err := store.AddChart(title, artist, "import", string(content))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: importing: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Imported %q (id %d) into %s\n", title, id, libPath)
+}
+
 func main() {
 	transposeFlag := flag.Int("transpose", 0, "transpose chords by N semitones")
 	configFlag := flag.String("config", "", "path to config file (default: ~/.config/chart-tty/config.toml)")
@@ -33,11 +83,16 @@ func main() {
 	aiConvertFlag := flag.Bool("ai-convert", false, "convert chart to compliant ChordPro via AI")
 	writeFlag := flag.Bool("write", false, "write converted chart to <name>.pro next to source (requires --ai-convert)")
 	setKeyFlag := flag.String("set-api-key", "", "store AI API key in config ('-' reads the key from stdin)")
+	importFlag := flag.String("import", "", "import a chart file into the library and exit")
 	flag.Usage = usage
 	flag.Parse()
 
 	if *versionFlag {
 		fmt.Printf("chart-tty %s\n", version)
+		os.Exit(0)
+	}
+	if *importFlag != "" {
+		runImport(*configFlag, *importFlag)
 		os.Exit(0)
 	}
 	if *writeFlag && !*aiConvertFlag {
@@ -175,9 +230,9 @@ func main() {
 		}
 		defer store.Close()
 
-		m := ui.NewDocModel(doc, rcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys).SetStore(store)
+		m := ui.NewDocModel(doc, rcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys).SetStore(store).SetSource(originalChart)
 		if converter != nil {
-			m = m.SetConverter(originalChart, converter)
+			m = m.SetConverter(converter)
 		}
 		if err := ui.RunModel(m); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: TUI failed: %v\n", err)
