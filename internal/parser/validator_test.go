@@ -59,6 +59,8 @@ func TestIsValidDirective(t *testing.T) {
 		{"uppercase env directive", "SOC", true},
 		{"x_ custom directive ignored per spec", "x_mspro_pedal_setting", true},
 		{"x_ bare", "x_", true},
+		{"conditional selector stripped", "title-soprano", true},
+		{"conditional env selector", "start_of_verse-soprano", true},
 	}
 
 	for _, tt := range tests {

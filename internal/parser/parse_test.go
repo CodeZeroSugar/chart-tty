@@ -333,6 +333,29 @@ func TestParseTabBlockGate(t *testing.T) {
 	}
 }
 
+func TestParseConditionalSelectors(t *testing.T) {
+	chart := `{title-soprano: Selected Song}
+{start_of_verse-soprano}
+A [D]line
+{end_of_verse}
+{comment-alto: softly}`
+	doc := parseChart(t, chart)
+
+	if doc.Title != "Selected Song" {
+		t.Errorf("Title = %q, want %q (selector stripped)", doc.Title, "Selected Song")
+	}
+	if len(doc.Sections) != 2 {
+		t.Fatalf("Sections = %#v, want 2", doc.Sections)
+	}
+	if doc.Sections[0].Name != "verse" {
+		t.Errorf("section name = %q, want verse", doc.Sections[0].Name)
+	}
+	last := doc.Sections[1].Lines
+	if len(last) != 1 || last[0].Type != LineTypeComment || last[0].Lyrics != "softly" {
+		t.Errorf("comment section lines = %#v, want one comment 'softly'", last)
+	}
+}
+
 func TestParseUnclosedEnvironmentFlushed(t *testing.T) {
 	doc := parseChart(t, "{soc}\nSwing low")
 

@@ -113,6 +113,27 @@ func TestValidateBracketContent(t *testing.T) {
 	}
 }
 
+func TestStripSelector(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"no selector", "title", "title"},
+		{"instrument selector", "define-guitar", "define"},
+		{"voice selector", "comment-alto", "comment"},
+		{"env selector", "start_of_verse-soprano", "start_of_verse"},
+		{"reversed selector", "comment-tenor!", "comment"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := stripSelector(tt.in); got != tt.want {
+				t.Errorf("stripSelector(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestExtractDirective(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -129,6 +150,7 @@ func TestExtractDirective(t *testing.T) {
 		{"empty data", "{title:}", "title", ""},
 		{"comment directive", "{comment:Verse 1}", "comment", "Verse 1"},
 		{"preserves directive case", "{Title: A Song}", "Title", "A Song"},
+		{"conditional selector stripped", "{title-soprano: Hi}", "title", "Hi"},
 	}
 
 	for _, tt := range tests {

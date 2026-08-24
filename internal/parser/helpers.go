@@ -144,6 +144,16 @@ func LooksLikeBasicChart(chart string) bool {
 	return sawChordLine
 }
 
+// stripSelector removes a conditional directive selector per spec:
+// "{title-soprano}" is the title directive selected for soprano. No canonical
+// directive name contains a hyphen, so cutting at the first one is safe.
+func stripSelector(name string) string {
+	if i := strings.IndexByte(name, '-'); i >= 0 {
+		return name[:i]
+	}
+	return name
+}
+
 func extractDirective(directiveLine string) (directive string, data string) {
 	inner := directiveLine[1 : len(directiveLine)-1]
 	inner = strings.TrimSpace(inner)
@@ -151,9 +161,9 @@ func extractDirective(directiveLine string) (directive string, data string) {
 	parts := strings.SplitN(inner, ":", 2)
 
 	if len(parts) > 1 {
-		return strings.TrimSpace(parts[0]), strings.TrimSpace(strings.Join(parts[1:], " "))
+		return stripSelector(strings.TrimSpace(parts[0])), strings.TrimSpace(strings.Join(parts[1:], " "))
 	}
-	return strings.TrimSpace(parts[0]), ""
+	return stripSelector(strings.TrimSpace(parts[0])), ""
 }
 
 func getDirectiveCategory(directive string) DirectiveCategory {

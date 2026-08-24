@@ -22,7 +22,7 @@ func NewValidator() (*Validator, error) {
 }
 
 func (v *Validator) IsValidDirective(k string) bool {
-	key := strings.ToLower(k)
+	key := strings.ToLower(stripSelector(strings.TrimSpace(k)))
 	if v.AllowUnkDirectives {
 		return true
 	}
