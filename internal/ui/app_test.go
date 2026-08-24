@@ -12,6 +12,7 @@ import (
 
 	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
+	"github.com/CodeZeroSugar/chart-tty/internal/db"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
 
@@ -326,6 +327,91 @@ func TestModelCustomKeys(t *testing.T) {
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
 	if !m.Quitting() {
 		t.Error("custom quit key x did not quit")
+	}
+}
+
+func testStore(t *testing.T) *db.Store {
+	t.Helper()
+	s, err := db.OpenMemory()
+	if err != nil {
+		t.Fatalf("OpenMemory(): %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+	return s
+}
+
+func pressKey(t *testing.T, m Model, k string) (Model, tea.Cmd) {
+	t.Helper()
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+	m2, ok := nm.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T, want Model", nm)
+	}
+	return m2, cmd
+}
+
+func TestLibraryBrowserFlow(t *testing.T) {
+	s := testStore(t)
+	id1, _ := s.AddChart("Swing Low", "Artist A", "import", "{title: Swing Low}\n{start_of_verse}\n[G]Swing low\n{end_of_verse}")
+	_, _ = s.AddChart("Second Song", "Artist B", "ai", "{title: Second Song}\n[C]body")
+
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 80, Height: 10})
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	if got := m.Screen(); got != "browseCharts" {
+		t.Fatalf("screen = %q, want browseCharts", got)
+	}
+	view := m.View()
+	if !strings.Contains(view, "Library") || !strings.Contains(view, "Swing Low") || !strings.Contains(view, "Second Song") {
+		t.Errorf("browser view missing entries:\n%s", view)
+	}
+
+	// esc returns to chart view without loading anything.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	if got := m.Screen(); got != "viewChart" {
+		t.Errorf("after esc screen = %q, want viewChart", got)
+	}
+
+	// Re-open and select the first entry (list is newest-first: Second Song).
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m2, ok := nm.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T", nm)
+	}
+	if cmd != nil {
+		t.Error("enter should not produce a cmd")
+	}
+	if got := m2.Screen(); got != "viewChart" {
+		t.Fatalf("after enter screen = %q, want viewChart", got)
+	}
+	if m2.title != "Second Song" {
+		t.Errorf("loaded title = %q, want Second Song", m2.title)
+	}
+	view = m2.View()
+	if !strings.Contains(view, "C") || !strings.Contains(view, "body") {
+		t.Errorf("view %q does not look like loaded chart content", view)
+	}
+	_ = id1
+}
+
+func TestLibraryBrowserEmpty(t *testing.T) {
+	s := testStore(t)
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	if !strings.Contains(m.View(), "library is empty") {
+		t.Errorf("empty-library view = %q", m.View())
+	}
+}
+
+func TestLibraryNoStoreShowsMessage(t *testing.T) {
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetShowHelp(true), tea.WindowSizeMsg{Width: 40, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	if got := m.Screen(); got != "viewChart" {
+		t.Errorf("screen = %q, want stay on viewChart", got)
+	}
+	if !strings.Contains(m.View(), "no library open") {
+		t.Errorf("view %q missing 'no library open' message", m.View())
 	}
 }
 

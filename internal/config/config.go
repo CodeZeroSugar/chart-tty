@@ -11,9 +11,16 @@ import (
 )
 
 type Config struct {
-	Theme ThemeConfig `toml:"theme"`
-	Keys  KeyConfig   `toml:"keys"`
-	AI    AIConfig    `toml:"ai"`
+	Theme   ThemeConfig   `toml:"theme"`
+	Keys    KeyConfig     `toml:"keys"`
+	AI      AIConfig      `toml:"ai"`
+	Library LibraryConfig `toml:"library"`
+}
+
+// LibraryConfig holds chart library settings. An empty Path means the
+// default location ($XDG_DATA_HOME/chart-tty/library.db).
+type LibraryConfig struct {
+	Path string `toml:"path"`
 }
 
 type ThemeConfig struct {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
+	"github.com/CodeZeroSugar/chart-tty/internal/db"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 	"github.com/CodeZeroSugar/chart-tty/internal/ui"
 )
@@ -159,7 +160,22 @@ func main() {
 
 	isTTY := term.IsTerminal(int(os.Stdout.Fd())) && term.IsTerminal(int(os.Stdin.Fd()))
 	if isTTY {
-		m := ui.NewDocModel(doc, rcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys)
+		libPath := appCfg.Library.Path
+		if libPath == "" {
+			libPath, err = db.DefaultPath()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		store, dbErr := db.Open(libPath)
+		if dbErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: opening library: %v\n", dbErr)
+			os.Exit(1)
+		}
+		defer store.Close()
+
+		m := ui.NewDocModel(doc, rcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys).SetStore(store)
 		if converter != nil {
 			m = m.SetConverter(originalChart, converter)
 		}

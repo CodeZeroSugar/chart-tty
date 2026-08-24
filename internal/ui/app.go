@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -8,7 +9,17 @@ import (
 
 	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
+	"github.com/CodeZeroSugar/chart-tty/internal/db"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
+)
+
+type screen int
+
+const (
+	screenViewChart screen = iota
+	screenBrowseCharts
+	screenBrowseSetlists
+	screenViewSetlist
 )
 
 type Model struct {
@@ -27,6 +38,18 @@ type Model struct {
 	converter  *aichart.Client
 	message    string
 	converting bool
+
+	screen        screen
+	store         *db.Store
+	browseCharts  []db.ChartMeta
+	browseCursor  int
+	setlists      []db.SetlistMeta
+	setlistCursor int
+	setlist       struct {
+		name   string
+		charts []db.StoredChart
+		index  int
+	}
 }
 
 type convertDoneMsg struct {
@@ -87,41 +110,113 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.applyConversion(msg.result, msg.err)
 	case tea.KeyMsg:
 		k := msg.String()
-		switch {
-		case k == "ctrl+c":
+		if k == "ctrl+c" || k == m.keys.Quit {
 			m.quitting = true
 			return m, tea.Quit
-		case k == m.keys.Quit:
-			m.quitting = true
-			return m, tea.Quit
-		case k == m.keys.ScrollUp || k == "up":
-			m.offset--
-		case k == m.keys.ScrollDown || k == "down":
-			m.offset++
-		case k == m.keys.TransposeUp:
-			if m.doc != nil {
-				m.doc.Transpose(1)
-				m.transpose++
-				m.lines = Render(m.doc, m.cfg)
-			}
-		case k == m.keys.TransposeDown:
-			if m.doc != nil {
-				m.doc.Transpose(-1)
-				m.transpose--
-				m.lines = Render(m.doc, m.cfg)
-			}
-		case k == "pgup" || k == "b":
-			m.offset -= max(m.bodyHeight(), 1)
-		case k == "pgdown" || k == " ":
-			m.offset += max(m.bodyHeight(), 1)
-		case k == "home" || k == "g":
-			m.offset = 0
-		case k == "end" || k == "G":
-			m.offset = len(m.lines)
-		case k == "c":
-			nm, cmd := m.startConversion()
-			return nm, cmd
 		}
+		return m.updateScreen(k)
+	}
+	m.clampOffset()
+	return m, nil
+}
+
+func (m Model) updateScreen(k string) (tea.Model, tea.Cmd) {
+	if m.screen == screenBrowseCharts {
+		return m.updateBrowseChartsKeys(k)
+	}
+	return m.updateViewChartKeys(k)
+}
+
+func (m Model) updateBrowseChartsKeys(k string) (tea.Model, tea.Cmd) {
+	switch k {
+	case "down", "j":
+		if m.browseCursor < len(m.browseCharts)-1 {
+			m.browseCursor++
+		}
+	case "up", "k":
+		if m.browseCursor > 0 {
+			m.browseCursor--
+		}
+	case "enter":
+		if len(m.browseCharts) > 0 {
+			return m.openStoredChart(m.browseCharts[m.browseCursor].ID)
+		}
+	case "esc":
+		m.screen = screenViewChart
+	}
+	return m, nil
+}
+
+// openLibraryBrowser switches to the chart library listing.
+func (m Model) openLibraryBrowser() (tea.Model, tea.Cmd) {
+	if m.store == nil {
+		m.message = "no library open"
+		return m, nil
+	}
+	charts, err := m.store.ListCharts()
+	if err != nil {
+		m.message = fmt.Sprintf("library error: %v", err)
+		return m, nil
+	}
+	m.browseCharts = charts
+	m.browseCursor = 0
+	m.screen = screenBrowseCharts
+	return m, nil
+}
+
+// openStoredChart loads a stored library chart into the viewer.
+func (m Model) openStoredChart(id int64) (tea.Model, tea.Cmd) {
+	stored, err := m.store.GetChart(id)
+	if err != nil {
+		m.message = fmt.Sprintf("library error: %v", err)
+		return m, nil
+	}
+	doc, perr := parseStored(stored.Content)
+	if perr != nil {
+		m.message = "stored chart failed to parse"
+		return m, nil
+	}
+	m.screen = screenViewChart
+	m.doc = doc
+	m.title = doc.Title
+	m.transpose = 0
+	m.offset = 0
+	m.lines = Render(doc, m.cfg)
+	m.message = ""
+	return m, nil
+}
+
+func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
+	switch {
+	case k == m.keys.ScrollUp || k == "up":
+		m.offset--
+	case k == m.keys.ScrollDown || k == "down":
+		m.offset++
+	case k == m.keys.TransposeUp:
+		if m.doc != nil {
+			m.doc.Transpose(1)
+			m.transpose++
+			m.lines = Render(m.doc, m.cfg)
+		}
+	case k == m.keys.TransposeDown:
+		if m.doc != nil {
+			m.doc.Transpose(-1)
+			m.transpose--
+			m.lines = Render(m.doc, m.cfg)
+		}
+	case k == "L":
+		return m.openLibraryBrowser()
+	case k == "pgup" || k == "b":
+		m.offset -= max(m.bodyHeight(), 1)
+	case k == "pgdown" || k == " ":
+		m.offset += max(m.bodyHeight(), 1)
+	case k == "home" || k == "g":
+		m.offset = 0
+	case k == "end" || k == "G":
+		m.offset = len(m.lines)
+	case k == "c":
+		nm, cmd := m.startConversion()
+		return nm, cmd
 	}
 	m.clampOffset()
 	return m, nil
@@ -181,6 +276,9 @@ func (m Model) visibleRows() int {
 }
 
 func (m Model) View() string {
+	if m.screen == screenBrowseCharts {
+		return m.viewBrowseCharts()
+	}
 	var sb strings.Builder
 	title := m.title
 	if k := m.currentKey(); k != "" {
@@ -222,6 +320,56 @@ func (m Model) View() string {
 		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · space/b page · +/- transpose · c convert · q quit"))
 	}
 	return sb.String()
+}
+
+// viewBrowseCharts renders the library listing with a cursor.
+func (m Model) viewBrowseCharts() string {
+	var sb strings.Builder
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Library"))
+	sb.WriteString("\n\n")
+
+	if len(m.browseCharts) == 0 {
+		sb.WriteString("(library is empty — import a chart with i from the viewer)")
+		return sb.String()
+	}
+
+	bodyHeight := m.bodyHeight() - 2 // header + blank line
+	start := max(m.browseCursor-bodyHeight+1, 0)
+	end := min(start+bodyHeight, len(m.browseCharts))
+
+	for i := start; i < end; i++ {
+		c := m.browseCharts[i]
+		marker := "  "
+		row := lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("%s %s — %s [%s]", c.Title, c.Artist, c.Source, c.UpdatedAt.Format("2006-01-02")))
+		if i == m.browseCursor {
+			marker = "> "
+			row = lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s %s — %s [%s]", c.Title, c.Artist, c.Source, c.UpdatedAt.Format("2006-01-02")))
+		}
+		sb.WriteString(marker + row)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+	sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k move · enter open · esc back"))
+	return sb.String()
+}
+
+// parseStored detects the format of stored content and parses it, mirroring
+// the CLI's mode detection.
+func parseStored(content string) (*parser.Document, error) {
+	validator, err := parser.NewValidator()
+	if err != nil {
+		return nil, err
+	}
+	isValid, verr := validator.ValidateChart(content)
+
+	mode := parser.ModeChordPro
+	if !isValid || parser.LooksLikeBasicChart(content) {
+		mode = parser.ModeBasic
+		if !isValid && verr != nil {
+			_ = verr // basic mode handles it
+		}
+	}
+	return parser.NewParser(mode).Parse(content)
 }
 
 // body returns the rendered lines visible at the current offset. In
@@ -284,6 +432,26 @@ func (m Model) Quitting() bool { return m.quitting }
 func (m Model) Offset() int { return m.offset }
 
 func (m Model) Transpose() int { return m.transpose }
+
+// Screen reports the current screen, for tests.
+func (m Model) Screen() string {
+	switch m.screen {
+	case screenBrowseCharts:
+		return "browseCharts"
+	case screenBrowseSetlists:
+		return "browseSetlists"
+	case screenViewSetlist:
+		return "viewSetlist"
+	default:
+		return "viewChart"
+	}
+}
+
+// SetStore attaches the chart library.
+func (m Model) SetStore(s *db.Store) Model {
+	m.store = s
+	return m
+}
 
 func Run(doc *parser.Document, cfg RenderConfig) error {
 	return RunModel(NewDocModel(doc, cfg))
