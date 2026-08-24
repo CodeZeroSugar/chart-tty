@@ -46,9 +46,10 @@ embedded into the binary via `parser.SpecReference`). The "chart-tty deltas" sec
 lists where this project deliberately diverges.
 
 - **Directive handling is case-insensitive** everywhere (validation, category dispatch, meta/env handlers, env aliases).
+- **Directive acceptance policy** (see `internal/parser/chordpro-spec.md` §Directive acceptance policy): `x_*` ignored silently per spec; conditional selectors stripped (`{title-soprano}` ≡ `{title}`); bare/attribute argument forms accepted (`{start_of_verse Verse 1}` ≡ `{start_of_verse label="Verse 1"}`); spec-legal unsupported directives (`define`, `transpose`, delegated envs, output/legacy families) validate-ok and skip at parse; arbitrary `start_of_*`/`end_of_*` names are legal environments.
 - `{subtitle}` and `{st}` map to the **Artist** field.
-- **Strict chord grammar** (validator + anything parsing chord names): root `[A-G]` with optional `b`/`#`; optional qualifier (`maj`, `min`, `mi`, `m`, `dim`, `aug`, `sus`, `add`, `h`); extension tokens (`7`, `69`, `m7b5`, `7sus4`, `7b5`, `7#9`, `9`, `11`, `13`, `alt`, `+`, alterations, `sus/add/maj/^` forms); bass is a root note (`C/G`) **or a number** (`G6/9`).
-- **Non-chord bracket content is invalid** unless escaped with a leading `*`: `[*N.C.]` and `[*----]` are valid; `[N.C.]`, `[----]`, `[H]`, `[Coda]`, `[Gm*]` are invalid.
+- **Strict chord grammar** (validator + anything parsing chord names): root `[A-GH]` with optional `b`/`#` (German `H` = B natural); optional qualifier (`maj`, `min`, `mi`, `m`, `dim`, `aug`, `sus`, `add`, `h`); extension tokens (`7`, `69`, `m7b5`, `7sus4`, `7b5`, `7#9`, `9`, `11`, `13`, `alt`, `+`, alterations, `sus/add/maj/^` forms); bass is a root note (`C/G`) **or a number** (`G6/9`). **Spec relaxed mode** is also accepted: valid root + any non-pipe extension tail (`[Coda]`, `[Gm*]`, `[Chorus]`); relaxed chords transpose by root only.
+- **Non-chord bracket content is invalid** unless escaped with a leading `*`: `[*N.C.]` and `[*----]` are valid; `[N.C.]`, `[----]`, `[1]`, `[foo]` are invalid.
 - **Blank-line flush rules** (parser):
   - Outside an open environment: blank lines always flush the current section.
   - Inside an open environment (`{start_of_*}`...`{end_of_*}`): blank lines never flush.

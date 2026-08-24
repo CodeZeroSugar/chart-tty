@@ -138,25 +138,39 @@ May include an optional label: `{start_of_tab: Solo}`.
 
 ## Chart-tty deltas
 
-Deliberate deviations and stricter enforcement compared to the spec above:
+Deliberate deviations and enforcement choices compared to the spec above:
 
 - **Case-insensitive directives**: dispatch and matching lowercase everything; the spec
   treats directive names case-sensitively in practice.
 - **`{subtitle}`/`{st}` maps to the Artist field** — a chart-tty convention based on
   real-world charts.
-- **Strict bracket-content validation**: non-chord bracket content fails validation unless
-  escaped with `[*...]`. Per spec, bracket content is technically free-form ("it doesn't
-  matter what you put between the []") unless needed for diagrams/transposition — but
-  chart-tty validates to keep rendered output sane.
-- **Chord grammar is a fixed subset**: root `[A-G]` + optional `b`/`#`, qualifier set
+- **Bracket content**: strict grammar first; otherwise **spec relaxed mode** applies — a
+  valid root (`[A-GH]` + optional `b`/`#`) plus any non-empty extension tail is accepted
+  (e.g. `[Coda]`, `[Gm*]`, `[Chorus]`). Only content that cannot start a chord (`[N.C.]`,
+  `[----]`, `[1]`, `[foo]`) requires the `[*...]` escape. Pipes are excluded from relaxed
+  tails so TAB lines never parse as chords.
+- **Chord grammar**: roots `[A-GH]` (+ `b`/`#`; German `H` = B natural), qualifier set
   (`maj,min,mi,m,dim,aug,sus,add,h`), numeric/altered extension tokens, slash bass that may
-  be a root or a number (`G6/9`). No relaxed mode, no German `H`, no Roman/Nashville roots.
+  be a root or a number (`G6/9`). Dutch note names (Bes/As), Roman numerals and Nashville
+  numbers remain unsupported. Relaxed-mode chords transpose by root only.
 - **Tab gate**: a `{sot}` block renders as tablature only if ≥4 lines match
   `^[A-Ga-g][ \t]*\|`; decorative blocks are dropped entirely. The spec says tab lines are
   passed through unchanged but places no structural requirement on them.
 - **Blank-line flush rule**: outside any environment, blank lines flush the current
   section; inside one, never; trailing sections flush at end of parse. The spec leaves
   empty-line semantics to implementations.
-- **No support** (by design): delegated environments, `{define}`, `{transpose}`,
-  conditional selectors, markup, font/size/colour legacy directives. Unknown directives are
-  ignored during parsing (spec-compliant for `x_*`).
+
+### Directive acceptance policy
+
+- **Accepted & enforced**: meta family, formatting family (comments render), standard
+  environments + short forms + standalone `{chorus}`, **arbitrary `start_of_*`/`end_of_*`
+  names** (spec §Environments), conditional selectors (stripped: `{title-soprano}` ≡
+  `{title}`), bare/attribute argument forms (`{start_of_verse Verse 1}` ≡
+  `{start_of_verse label="Verse 1"}` ≡ `{start_of_verse: Verse 1}`).
+- **Accepted & silently skipped** (validate-ok, no output): `new_song`, delegated
+  environments, `define`, `chord`, `transpose`, output directives (`new_page`,
+  `column_break`, ...), legacy grid/titles/columns/font-size-colour families. Full list in
+  `internal/parser/spec.json` → `ignored_directives`.
+- **Ignored per spec mandate**: `x_*` custom directives — completely ignored, no warning.
+- **Never emitted by the AI converter**: see the never-emit list in
+  `internal/aichart/prompt.go`.
