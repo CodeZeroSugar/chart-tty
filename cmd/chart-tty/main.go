@@ -244,16 +244,16 @@ func main() {
 	originalChart := chart
 
 	if *aiConvertFlag {
-		status := newStatusLine("sending chart to " + aiClient.Model)
+		status := ui.NewStatusLine("sending chart to " + aiClient.Model)
 		res, cerr := aiClient.ConvertProgress(chart, func(e aichart.ProgressEvent) {
-			status.update(e.Message)
+			status.Update(e.Message)
 		})
 		if cerr != nil {
-			status.finish("conversion failed")
+			status.Finish("conversion failed")
 			fmt.Fprintf(os.Stderr, "Error: AI conversion failed: %v\n", cerr)
 			os.Exit(1)
 		}
-		status.finish(fmt.Sprintf("converted after %d attempt(s)", res.Attempts))
+		status.Finish(fmt.Sprintf("converted after %d attempt(s)", res.Attempts))
 		if *writeFlag {
 			ext := filepath.Ext(absPath)
 			outPath := strings.TrimSuffix(absPath, ext) + ".pro"

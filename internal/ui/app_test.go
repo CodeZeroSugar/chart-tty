@@ -827,6 +827,15 @@ func TestProgramShowsConvertingIndicator(t *testing.T) {
 	}
 }
 
+func TestStatusLineFinishOnce(t *testing.T) {
+	// Non-animated (stderr not a TTY in tests): Update/Finish should not
+	// deadlock and Finish must only fire once.
+	s := NewStatusLine("start")
+	s.Update("attempt 1/3: contacting model")
+	s.Finish("done")
+	s.Finish("done again")
+}
+
 func TestDeleteChartFromBrowser(t *testing.T) {
 	s := testStore(t)
 	id1, _ := s.AddChart("Keep Me", "", "import", "{title: Keep Me}\n[G]x")

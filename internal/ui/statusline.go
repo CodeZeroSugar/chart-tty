@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -11,10 +11,12 @@ import (
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// statusLine shows live progress on stderr during AI conversion. On a
-// terminal it renders an animated braille spinner with elapsed time and the
-// latest milestone; when stderr is piped it prints plain milestone lines.
-type statusLine struct {
+// StatusLine shows live AI-conversion progress directly on the terminal via
+// stderr, decoupled from bubbletea's render loop. On a terminal it animates a
+// braille spinner with elapsed time and the latest milestone; when stderr is
+// piped it prints plain milestone lines. The TUI uses this same mechanism as
+// the CLI so in-progress work is always visible.
+type StatusLine struct {
 	mu       sync.Mutex
 	message  string
 	start    time.Time
@@ -23,8 +25,8 @@ type statusLine struct {
 	once     sync.Once
 }
 
-func newStatusLine(initial string) *statusLine {
-	s := &statusLine{
+func NewStatusLine(initial string) *StatusLine {
+	s := &StatusLine{
 		message:  initial,
 		start:    time.Now(),
 		animated: term.IsTerminal(int(os.Stderr.Fd())),
@@ -36,7 +38,7 @@ func newStatusLine(initial string) *statusLine {
 	return s
 }
 
-func (s *statusLine) update(msg string) {
+func (s *StatusLine) Update(msg string) {
 	s.mu.Lock()
 	s.message = msg
 	s.mu.Unlock()
@@ -45,7 +47,7 @@ func (s *statusLine) update(msg string) {
 	}
 }
 
-func (s *statusLine) animate() {
+func (s *StatusLine) animate() {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for i := 0; ; i++ {
@@ -62,7 +64,8 @@ func (s *statusLine) animate() {
 	}
 }
 
-func (s *statusLine) finish(final string) {
+// Finish stops the spinner and prints the final status line once.
+func (s *StatusLine) Finish(final string) {
 	s.once.Do(func() {
 		close(s.done)
 		elapsed := time.Since(s.start).Round(time.Second)

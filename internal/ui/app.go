@@ -49,6 +49,7 @@ type Model struct {
 	converting   bool
 	convProgress *conversionProgress
 	spinnerIdx   int
+	statusLine   *StatusLine
 
 	chordMode parser.ChordMode
 
@@ -111,8 +112,6 @@ func (p *conversionProgress) get() string {
 func tickConversion() tea.Cmd {
 	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg { return conversionTickMsg{} })
 }
-
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 func NewModel(lines []string, cfg RenderConfig) Model {
 	return Model{lines: lines, cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode()}
@@ -188,6 +187,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case convertDoneMsg:
 		m.converting = false
 		m.convProgress = nil
+		if m.statusLine != nil {
+			if msg.err != nil {
+				m.statusLine.Finish("conversion failed")
+			} else {
+				m.statusLine.Finish(fmt.Sprintf("converted after %d attempt(s)", msg.result.Attempts))
+			}
+			m.statusLine = nil
+		}
 		m = m.applyConversion(msg.result, msg.err)
 	case conversionTickMsg:
 		if m.converting && m.convProgress != nil {
@@ -1092,11 +1099,14 @@ func (m Model) startConversion() (Model, tea.Cmd) {
 	m.converting = true
 	m.spinnerIdx = 0
 	m.message = spinnerFrames[0] + " converting…"
+	m.statusLine = NewStatusLine("sending chart to " + m.converter.Model)
 	client := m.converter
 	raw := m.rawChart
+	sl := m.statusLine
 	convCmd := func() tea.Msg {
 		res, err := client.ConvertProgress(raw, func(e aichart.ProgressEvent) {
 			prog.set(fmt.Sprintf("attempt %d/%d: %s", e.Attempt, e.MaxAttempts, e.Message))
+			sl.Update(fmt.Sprintf("attempt %d/%d: %s", e.Attempt, e.MaxAttempts, e.Message))
 		})
 		return convertDoneMsg{result: res, err: err}
 	}
