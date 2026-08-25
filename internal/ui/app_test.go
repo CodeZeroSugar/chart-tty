@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,8 +11,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/CodeZeroSugar/chart-tty/internal/aichart"
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
@@ -522,7 +525,7 @@ func TestHeaderRow(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			row := headerRow(tt.title, tt.msg, tt.width)
+			row := headerRow(tt.title, tt.msg, lipgloss.NewStyle().Faint(true), tt.width)
 			if tt.msg == "" {
 				// Title-only row is unpadded; the message case is padded.
 				if !strings.Contains(row, tt.title) {
@@ -759,6 +762,68 @@ func TestConvertOnSetlistListGivesHint(t *testing.T) {
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 	if !strings.Contains(m.View(), "open a setlist first") {
 		t.Errorf("view %q missing hint message", m.View())
+	}
+}
+
+// TestProgramShowsConvertingIndicator runs a real bubbletea program with a
+// slow mock converter and asserts the corner indicator renders while the
+// conversion is in flight, before the final "converted" state.
+func TestProgramShowsConvertingIndicator(t *testing.T) {
+	converted := "{title: Converted Song}\n{start_of_chorus}\nSwing [D]low\n{eoc}"
+	resp, _ := json.Marshal(map[string]any{
+		"choices": []map[string]any{{"message": map[string]any{"content": converted}}},
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(800 * time.Millisecond)
+		w.Write(resp)
+	}))
+	defer srv.Close()
+	client := &aichart.Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
+
+	doc := &parser.Document{
+		Title:    "Swing Low",
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{{
+			Name:  "chorus",
+			Lines: []parser.ParsedLine{{Type: parser.LineTypeLyric, Raw: "Swing low", Lyrics: "Swing low"}},
+		}},
+	}
+	m := NewDocModel(doc, RenderConfig{}).SetShowHelp(false).SetSource("Swing low").SetConverter(client)
+
+	var out bytes.Buffer
+	p := tea.NewProgram(m, tea.WithInput(strings.NewReader("")), tea.WithOutput(&out))
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		p.Send(tea.WindowSizeMsg{Width: 80, Height: 24})
+		p.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+		time.Sleep(1500 * time.Millisecond)
+		p.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	}()
+	if _, err := p.Run(); err != nil {
+		t.Fatalf("program: %v", err)
+	}
+
+	got := out.String()
+	ci := strings.Index(got, "converting…")
+	cd := strings.Index(got, "converted")
+	if ci < 0 {
+		t.Errorf("program output never rendered converting… (ci=%d):\n%s", ci, got)
+	}
+	if cd < 0 {
+		t.Errorf("program output never rendered converted (cd=%d):\n%s", cd, got)
+	}
+	if ci >= 0 && cd >= 0 && ci > cd {
+		t.Errorf("converting… (%d) appeared after converted (%d):\n%s", ci, cd, got)
+	}
+	braille := false
+	for _, g := range "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" {
+		if strings.ContainsRune(got, g) {
+			braille = true
+			break
+		}
+	}
+	if !braille {
+		t.Errorf("no braille spinner frame rendered during conversion:\n%s", got)
 	}
 }
 

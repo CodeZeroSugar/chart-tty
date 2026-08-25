@@ -48,6 +48,7 @@ type Model struct {
 	message      string
 	converting   bool
 	convProgress *conversionProgress
+	spinnerIdx   int
 
 	chordMode parser.ChordMode
 
@@ -110,6 +111,8 @@ func (p *conversionProgress) get() string {
 func tickConversion() tea.Cmd {
 	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg { return conversionTickMsg{} })
 }
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 func NewModel(lines []string, cfg RenderConfig) Model {
 	return Model{lines: lines, cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode()}
@@ -188,7 +191,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.applyConversion(msg.result, msg.err)
 	case conversionTickMsg:
 		if m.converting && m.convProgress != nil {
-			m.message = "converting… " + m.convProgress.get()
+			m.spinnerIdx++
+			frame := spinnerFrames[m.spinnerIdx%len(spinnerFrames)]
+			if prog := m.convProgress.get(); prog != "" {
+				m.message = fmt.Sprintf("%s converting… %s", frame, prog)
+			} else {
+				m.message = frame + " converting…"
+			}
 			return m, tickConversion()
 		}
 		return m, nil
@@ -671,7 +680,7 @@ func (m Model) View() string {
 		return m.viewPickFile()
 	}
 	if m.doc == nil && len(m.lines) == 0 {
-		out := headerRow("chart-tty", m.message, m.width) + "\n\n" +
+		out := headerRow("chart-tty", m.message, m.messageStyle(), m.width) + "\n\n" +
 			lipgloss.NewStyle().Faint(true).Render("No chart loaded.\nL library · S setlists · q quit")
 		return out
 	}
@@ -681,7 +690,7 @@ func (m Model) View() string {
 		title += " · Key: " + k
 	}
 	if title != "" || m.message != "" {
-		sb.WriteString(headerRow(title, m.message, m.width))
+		sb.WriteString(headerRow(title, m.message, m.messageStyle(), m.width))
 		sb.WriteString("\n")
 	}
 
@@ -724,7 +733,7 @@ func (m Model) viewBrowseCharts() string {
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow")).Render(fmt.Sprintf("Delete %q? (y/n)", m.deletePending)))
 		sb.WriteString("\n\n")
 	} else {
-		sb.WriteString(headerRow("Library", m.message, m.width))
+		sb.WriteString(headerRow("Library", m.message, m.messageStyle(), m.width))
 		sb.WriteString("\n\n")
 	}
 
@@ -787,7 +796,7 @@ func (m Model) viewBrowseSetlists(picking bool) string {
 	if picking {
 		header = "Add \"" + m.browseCharts[m.browseCursor].Title + "\" to:"
 	}
-	sb.WriteString(headerRow(header, m.message, m.width))
+	sb.WriteString(headerRow(header, m.message, m.messageStyle(), m.width))
 	sb.WriteString("\n\n")
 
 	if m.inputMode {
@@ -837,7 +846,7 @@ func (m Model) viewSetlist() string {
 		curTitle = m.setlist.charts[m.setlist.index].title
 	}
 	header := fmt.Sprintf("%s ─ chart %s ─ %s%s", name, pos, curTitle, keySuffix)
-	sb.WriteString(headerRow(strings.TrimPrefix(strings.TrimRight(header, " "), "─ "), m.message, m.width))
+	sb.WriteString(headerRow(strings.TrimPrefix(strings.TrimRight(header, " "), "─ "), m.message, m.messageStyle(), m.width))
 	sb.WriteString("\n")
 
 	if m.setlist.index < len(m.setlist.charts) {
@@ -961,7 +970,7 @@ func (m Model) openDiskFile(path string) (tea.Model, tea.Cmd) {
 // viewPickFile renders the filesystem chart list.
 func (m Model) viewPickFile() string {
 	var sb strings.Builder
-	sb.WriteString(headerRow("Pick a chart  "+m.pickDir, m.message, m.width))
+	sb.WriteString(headerRow("Pick a chart  "+m.pickDir, m.message, m.messageStyle(), m.width))
 	sb.WriteString("\n\n")
 
 	if len(m.pickFiles) == 0 {
@@ -1011,7 +1020,7 @@ func truncateTo(s string, w int) string {
 // headerRow lays the title left-aligned and the status message right-aligned
 // on the same line, truncating with an ellipsis when they collide. The result
 // is exactly width cells wide.
-func headerRow(title, msg string, width int) string {
+func headerRow(title, msg string, style lipgloss.Style, width int) string {
 	if width < 1 {
 		width = 1
 	}
@@ -1033,7 +1042,16 @@ func headerRow(title, msg string, width int) string {
 	}
 	msg = truncateTo(msg, msgW)
 	pad := width - titleW - displayWidth(msg)
-	return lipgloss.NewStyle().Bold(true).Render(title) + strings.Repeat(" ", pad) + lipgloss.NewStyle().Faint(true).Render(msg)
+	return lipgloss.NewStyle().Bold(true).Render(title) + strings.Repeat(" ", pad) + style.Render(msg)
+}
+
+// messageStyle returns the status message style: loud bold/yellow while a
+// conversion is in flight, faint otherwise.
+func (m Model) messageStyle() lipgloss.Style {
+	if m.converting {
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow"))
+	}
+	return lipgloss.NewStyle().Faint(true)
 }
 
 // body returns the rendered lines visible at the current offset. In
@@ -1072,7 +1090,8 @@ func (m Model) startConversion() (Model, tea.Cmd) {
 	prog := &conversionProgress{}
 	m.convProgress = prog
 	m.converting = true
-	m.message = "converting…"
+	m.spinnerIdx = 0
+	m.message = spinnerFrames[0] + " converting…"
 	client := m.converter
 	raw := m.rawChart
 	convCmd := func() tea.Msg {
