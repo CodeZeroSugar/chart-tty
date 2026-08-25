@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -427,6 +429,81 @@ func TestModelChordModeToggle(t *testing.T) {
 	}
 	if !strings.Contains(m.View(), "chord mode: strict") {
 		t.Errorf("view %q missing strict message", m.View())
+	}
+}
+
+func TestFilePicker(t *testing.T) {
+	dir := t.TempDir()
+	chart := "{title: Picked}\n[G]body"
+	for name, content := range map[string]string{
+		"a_song.pro": chart,
+		"b_song.txt": chart,
+		"c_song.cho": chart,
+		"notes.md":   "not a chart",
+		"readme.TXT": chart,
+		"sub":        "",
+	} {
+		p := filepath.Join(dir, name)
+		if name == "sub" {
+			os.Mkdir(p, 0o755)
+			continue
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	m := update(t, NewModel(testLines(2), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 60, Height: 10})
+
+	// Open the picker rooted at the temp dir.
+	m.pickDir = dir
+	nm, _ := m.openFilePicker()
+	var ok bool
+	m, ok = nm.(Model)
+	if !ok {
+		t.Fatalf("openFilePicker returned %T, want Model", nm)
+	}
+
+	if got := m.Screen(); got != "pickFile" {
+		t.Fatalf("screen = %q, want pickFile", got)
+	}
+	view := m.View()
+	// Only allowed extensions listed; .md hidden, subdir hidden.
+	if !strings.Contains(view, "a_song.pro") || !strings.Contains(view, "b_song.txt") {
+		t.Errorf("view missing chart files:\n%s", view)
+	}
+	if strings.Contains(view, "notes.md") || strings.Contains(view, "sub") {
+		t.Errorf("view must not list disallowed entries:\n%s", view)
+	}
+	// Case-insensitive extension match: readme.TXT present.
+	if !strings.Contains(view, "readme.TXT") {
+		t.Errorf("view missing uppercase .TXT file:\n%s", view)
+	}
+
+	// Enter opens the first (sorted) chart into the viewer.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.Screen(); got != "viewChart" {
+		t.Fatalf("after enter screen = %q, want viewChart", got)
+	}
+	if !strings.Contains(m.View(), "Picked") {
+		t.Errorf("view %q missing loaded chart title", m.View())
+	}
+}
+
+func TestFilePickerEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	m := update(t, NewModel(testLines(2), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m.pickDir = dir
+	m.pickFiles = nil
+	m.pickCursor = 0
+	m.screen = screenPickFile
+	if !strings.Contains(m.View(), "no chart files found") {
+		t.Errorf("empty view = %q", m.View())
+	}
+	// esc exits back to the viewer.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	if got := m.Screen(); got != "viewChart" {
+		t.Errorf("after esc screen = %q, want viewChart", got)
 	}
 }
 

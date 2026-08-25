@@ -49,6 +49,7 @@ rendered chart as plain text instead.
 | `+` / `-` | Transpose up / down |
 | `m` | Toggle strict / relaxed chord parsing |
 | `i` | Import the loaded chart into the library |
+| `o` | Pick a chart file from `./charts` (`.cho .crd .chopro .chord .pro .txt`) |
 | `L` / `S` | Browse the chart library / setlists |
 | `c` | Convert the loaded chart to ChordPro via AI |
 

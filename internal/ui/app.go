@@ -3,6 +3,9 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -23,6 +26,7 @@ const (
 	screenBrowseSetlists
 	screenPickSetlist
 	screenViewSetlist
+	screenPickFile
 )
 
 type Model struct {
@@ -55,6 +59,9 @@ type Model struct {
 	setlistCursor int
 	inputMode     bool
 	nameInput     textinput.Model
+	pickDir       string
+	pickFiles     []string
+	pickCursor    int
 	setlist       struct {
 		name   string
 		charts []setlistChartView
@@ -178,6 +185,8 @@ func (m Model) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updatePickSetlistKeys(k)
 	case screenViewSetlist:
 		return m.updateViewSetlistKeys(k)
+	case screenPickFile:
+		return m.updatePickFileKeys(k)
 	default:
 		return m.updateViewChartKeys(k)
 	}
@@ -501,6 +510,8 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 		return m.openLibraryBrowser()
 	case k == "S":
 		return m.openSetlistBrowser()
+	case k == "o":
+		return m.openFilePicker()
 	case k == "pgup" || k == "b":
 		m.offset -= max(m.bodyHeight(), 1)
 	case k == "pgdown" || k == " ":
@@ -601,6 +612,8 @@ func (m Model) View() string {
 		return m.viewBrowseSetlists(m.screen == screenPickSetlist)
 	case screenViewSetlist:
 		return m.viewSetlist()
+	case screenPickFile:
+		return m.viewPickFile()
 	}
 	if m.doc == nil && len(m.lines) == 0 {
 		out := lipgloss.NewStyle().Bold(true).Render("chart-tty") + "\n\n" +
@@ -648,7 +661,7 @@ func (m Model) View() string {
 
 	if m.showHelp {
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · space/b page · +/- transpose · i save · L library · S setlists · c convert · q quit"))
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · space/b page · +/- transpose · i save · o open · L library · S setlists · c convert · q quit"))
 	}
 	return sb.String()
 }
@@ -803,6 +816,124 @@ func (m Model) viewSetlist() string {
 	return sb.String()
 }
 
+// pickerExts are the file extensions the disk picker lists.
+var pickerExts = map[string]bool{
+	".cho": true, ".crd": true, ".chopro": true, ".chord": true, ".pro": true, ".txt": true,
+}
+
+func isPickableFile(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return pickerExts[ext]
+}
+
+// openFilePicker lists chart files from the charts directory (falling back to
+// the working directory, or to an already-set pickDir for tests) and switches
+// to the picker screen.
+func (m Model) openFilePicker() (tea.Model, tea.Cmd) {
+	dir := m.pickDir
+	if dir == "" {
+		dir = "charts"
+		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+			dir = "."
+		}
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = dir
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		m.message = fmt.Sprintf("file picker error: %v", err)
+		return m, nil
+	}
+	files := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if isPickableFile(e.Name()) {
+			files = append(files, filepath.Join(abs, e.Name()))
+		}
+	}
+	slices.Sort(files)
+	m.pickDir = abs
+	m.pickFiles = files
+	m.pickCursor = 0
+	m.screen = screenPickFile
+	return m, nil
+}
+
+func (m Model) updatePickFileKeys(k string) (tea.Model, tea.Cmd) {
+	switch k {
+	case "down", "j":
+		if m.pickCursor < len(m.pickFiles)-1 {
+			m.pickCursor++
+		}
+	case "up", "k":
+		if m.pickCursor > 0 {
+			m.pickCursor--
+		}
+	case "enter":
+		if len(m.pickFiles) > 0 {
+			return m.openDiskFile(m.pickFiles[m.pickCursor])
+		}
+	case "esc":
+		m.screen = screenViewChart
+	}
+	return m, nil
+}
+
+// openDiskFile reads and loads a chart file from disk into the viewer.
+func (m Model) openDiskFile(path string) (tea.Model, tea.Cmd) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		m.message = fmt.Sprintf("read failed: %v", err)
+		return m, nil
+	}
+	doc, perr := parseStored(string(content), m.chordMode)
+	if perr != nil {
+		m.message = "file failed to parse"
+		return m, nil
+	}
+	m.screen = screenViewChart
+	m.doc = doc
+	m.title = doc.Title
+	m.transpose = 0
+	m.offset = 0
+	m.lines = Render(doc, m.cfg)
+	m.message = ""
+	m.rawChart = string(content)
+	return m, nil
+}
+
+// viewPickFile renders the filesystem chart list.
+func (m Model) viewPickFile() string {
+	var sb strings.Builder
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Pick a chart"))
+	sb.WriteString(lipgloss.NewStyle().Faint(true).Render("  " + m.pickDir))
+	sb.WriteString("\n\n")
+
+	if len(m.pickFiles) == 0 {
+		sb.WriteString("(no chart files found)")
+		return sb.String()
+	}
+
+	rows := max(m.bodyHeight()-3, 1)
+	start := max(m.pickCursor-rows+1, 0)
+	end := min(start+rows, len(m.pickFiles))
+	for i := start; i < end; i++ {
+		marker, style := "  ", lipgloss.NewStyle().Faint(true)
+		if i == m.pickCursor {
+			marker, style = "> ", lipgloss.NewStyle().Bold(true)
+		}
+		sb.WriteString(marker + style.Render(filepath.Base(m.pickFiles[i])))
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+	sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k move · enter open · esc back"))
+	return sb.String()
+}
+
 // body returns the rendered lines visible at the current offset. In
 // single-column mode it is the offset window; in two-column mode it is the
 // remaining stream from the offset, which layoutColumns chunks.
@@ -923,6 +1054,8 @@ func (m Model) Screen() string {
 		return "pickSetlist"
 	case screenViewSetlist:
 		return "viewSetlist"
+	case screenPickFile:
+		return "pickFile"
 	default:
 		return "viewChart"
 	}
