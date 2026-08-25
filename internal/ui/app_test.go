@@ -608,15 +608,13 @@ func TestConvertAfterLibraryOpen(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("c after library open must start a conversion")
 	}
-	done := cmd()
-	cdm, ok := done.(convertDoneMsg)
-	if !ok {
-		t.Fatalf("cmd produced %T, want convertDoneMsg", done)
+	m3, done := runCmd(t, m2, cmd)
+	if done.result.Chart == "" {
+		t.Fatalf("runCmd produced no convertDoneMsg; done=%#v", done)
 	}
 	if gotUser != stored {
 		t.Errorf("model sent %q, want the stored chart content %q", gotUser, stored)
 	}
-	m3 := update(t, m2, cdm)
 	if !strings.Contains(m3.View(), "Converted Song") {
 		t.Errorf("view %q missing converted title", m3.View())
 	}
@@ -643,8 +641,9 @@ func TestConvertInSetlistView(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("c in setlist view must start a conversion")
 	}
-	if _, ok := cmd().(convertDoneMsg); !ok {
-		t.Fatalf("cmd produced %T, want convertDoneMsg", cmd())
+	_, done := runCmd(t, m, cmd)
+	if done.result.Chart == "" {
+		t.Fatalf("runCmd produced no convertDoneMsg; done=%#v", done)
 	}
 	if gotUser != content {
 		t.Errorf("model sent %q, want the current setlist chart %q", gotUser, content)
@@ -658,6 +657,108 @@ func TestConvertNoRawChartMessage(t *testing.T) {
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 	if !strings.Contains(m.View(), "no chart to convert") {
 		t.Errorf("view %q missing no-chart-to-convert message", m.View())
+	}
+}
+
+func TestConversionTickUpdatesMessage(t *testing.T) {
+	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 80, Height: 10})
+
+	prog := &conversionProgress{}
+	prog.set("attempt 2/3: validating output")
+	m.converting = true
+	m.convProgress = prog
+	m.message = "converting…"
+
+	nm, cmd := m.Update(conversionTickMsg{})
+	m2, ok := nm.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T", nm)
+	}
+	if !strings.Contains(m2.message, "attempt 2/3: validating output") {
+		t.Errorf("message = %q, want live progress text", m2.message)
+	}
+	if cmd == nil {
+		t.Error("tick while converting must reschedule a tick")
+	}
+}
+
+func TestConversionTickStopsAfterDone(t *testing.T) {
+	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 80, Height: 10})
+	m.converting = false
+	m.convProgress = nil
+
+	_, cmd := m.Update(conversionTickMsg{})
+	if cmd != nil {
+		t.Error("tick after conversion finished must not reschedule")
+	}
+}
+
+func TestConvertFromLibraryBrowser(t *testing.T) {
+	s := testStore(t)
+	var gotUser string
+	client := mockCaptureConverter(t, func(u string) { gotUser = u })
+
+	content := "{title: Highlighted}\n[G]body"
+	_, _ = s.AddChart("Highlighted", "", "import", content)
+
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetStore(s).SetConverter(client), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	// cursor starts at the only entry; press c on the browser.
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if _, ok := nm.(Model); !ok {
+		t.Fatalf("Update returned %T", nm)
+	}
+	if cmd == nil {
+		t.Fatal("c on the library browser must start a conversion")
+	}
+	_, done := runCmd(t, m, cmd)
+	if done.result.Chart == "" {
+		t.Fatal("library-browser conversion produced no result")
+	}
+	if gotUser != content {
+		t.Errorf("model sent %q, want highlighted chart %q", gotUser, content)
+	}
+}
+
+func TestConvertFromFilePicker(t *testing.T) {
+	dir := t.TempDir()
+	content := "{title: FromDisk}\n[C]body"
+	if err := os.WriteFile(filepath.Join(dir, "song.pro"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var gotUser string
+	client := mockCaptureConverter(t, func(u string) { gotUser = u })
+
+	m := update(t, NewModel(testLines(2), RenderConfig{}).SetShowHelp(false).SetConverter(client), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m.pickDir = dir
+	nm, _ := m.openFilePicker()
+	m = nm.(Model)
+
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if _, ok := nm.(Model); !ok {
+		t.Fatalf("Update returned %T", nm)
+	}
+	if cmd == nil {
+		t.Fatal("c on the file picker must start a conversion")
+	}
+	_, done := runCmd(t, m, cmd)
+	if done.result.Chart == "" {
+		t.Fatal("file-picker conversion produced no result")
+	}
+	if gotUser != content {
+		t.Errorf("model sent %q, want highlighted file %q", gotUser, content)
+	}
+}
+
+func TestConvertOnSetlistListGivesHint(t *testing.T) {
+	s := testStore(t)
+	m := update(t, NewModel(testLines(2), RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if !strings.Contains(m.View(), "open a setlist first") {
+		t.Errorf("view %q missing hint message", m.View())
 	}
 }
 
@@ -880,6 +981,29 @@ func TestLibraryNoStoreShowsMessage(t *testing.T) {
 	}
 }
 
+// runCmd executes a tea.Cmd (executing each sub-command of a BatchMsg) and
+// feeds the resulting messages through Update, returning the final model and
+// any convertDoneMsg.
+func runCmd(t *testing.T, m Model, cmd tea.Cmd) (Model, convertDoneMsg) {
+	t.Helper()
+	var done convertDoneMsg
+	feed := func(msg tea.Msg) {
+		if d, ok := msg.(convertDoneMsg); ok {
+			done = d
+		}
+		m = update(t, m, msg)
+	}
+	msgs := cmd()
+	if batch, ok := msgs.(tea.BatchMsg); ok {
+		for _, sub := range batch {
+			feed(sub())
+		}
+		return m, done
+	}
+	feed(msgs)
+	return m, done
+}
+
 func TestModelConvertKey(t *testing.T) {
 	converted := "{title: Converted Song}\n{start_of_chorus}\nSwing [D]low\n{eoc}"
 	resp, _ := json.Marshal(map[string]any{
@@ -920,13 +1044,10 @@ func TestModelConvertKey(t *testing.T) {
 		t.Errorf("view %q does not show converting state", m2.View())
 	}
 
-	done := cmd()
-	cdm, ok := done.(convertDoneMsg)
-	if !ok {
-		t.Fatalf("cmd produced %T, want convertDoneMsg", done)
+	m3, cdm := runCmd(t, m2, cmd)
+	if cdm.result.Chart == "" {
+		t.Fatalf("cmd produced no convertDoneMsg")
 	}
-
-	m3 := update(t, m2, cdm)
 	if m3.converting {
 		t.Error("still converting after convertDoneMsg")
 	}

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,21 +32,22 @@ const (
 )
 
 type Model struct {
-	lines      []string
-	doc        *parser.Document
-	transpose  int
-	offset     int
-	width      int
-	height     int
-	title      string
-	cfg        RenderConfig
-	keys       config.KeyConfig
-	quitting   bool
-	showHelp   bool
-	rawChart   string
-	converter  *aichart.Client
-	message    string
-	converting bool
+	lines        []string
+	doc          *parser.Document
+	transpose    int
+	offset       int
+	width        int
+	height       int
+	title        string
+	cfg          RenderConfig
+	keys         config.KeyConfig
+	quitting     bool
+	showHelp     bool
+	rawChart     string
+	converter    *aichart.Client
+	message      string
+	converting   bool
+	convProgress *conversionProgress
 
 	chordMode parser.ChordMode
 
@@ -79,6 +82,33 @@ type setlistChartView struct {
 type convertDoneMsg struct {
 	result aichart.Result
 	err    error
+}
+
+// conversionTickMsg prompts the model to refresh the corner status from the
+// live conversion progress.
+type conversionTickMsg struct{}
+
+// conversionProgress holds the latest AI progress event shared between the
+// conversion goroutine and the model's tick handler.
+type conversionProgress struct {
+	mu  sync.Mutex
+	msg string
+}
+
+func (p *conversionProgress) set(m string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.msg = m
+}
+
+func (p *conversionProgress) get() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.msg
+}
+
+func tickConversion() tea.Cmd {
+	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg { return conversionTickMsg{} })
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
@@ -153,7 +183,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case convertDoneMsg:
+		m.converting = false
+		m.convProgress = nil
 		m = m.applyConversion(msg.result, msg.err)
+	case conversionTickMsg:
+		if m.converting && m.convProgress != nil {
+			m.message = "converting… " + m.convProgress.get()
+			return m, tickConversion()
+		}
+		return m, nil
 	case tea.KeyMsg:
 		k := msg.String()
 		if k == "ctrl+c" || k == m.keys.Quit {
@@ -282,6 +320,8 @@ func (m Model) updateBrowseSetlistsKeys(k string) (tea.Model, tea.Cmd) {
 			m.offset = 0
 			m.screen = screenViewSetlist
 		}
+	case "c":
+		m.message = "open a setlist first"
 	case "esc":
 		m.screen = screenViewChart
 	}
@@ -353,6 +393,16 @@ func (m Model) updateBrowseChartsKeys(k string) (tea.Model, tea.Cmd) {
 	case "d":
 		if len(m.browseCharts) > 0 {
 			m.deletePending = m.browseCharts[m.browseCursor].Title
+		}
+	case "c":
+		if len(m.browseCharts) > 0 {
+			stored, err := m.store.GetChart(m.browseCharts[m.browseCursor].ID)
+			if err != nil {
+				m.message = fmt.Sprintf("library error: %v", err)
+				return m, nil
+			}
+			m.rawChart = stored.Content
+			return m.startConversion()
 		}
 	case "s":
 		if m.store == nil {
@@ -869,6 +919,16 @@ func (m Model) updatePickFileKeys(k string) (tea.Model, tea.Cmd) {
 		if len(m.pickFiles) > 0 {
 			return m.openDiskFile(m.pickFiles[m.pickCursor])
 		}
+	case "c":
+		if len(m.pickFiles) > 0 {
+			content, err := os.ReadFile(m.pickFiles[m.pickCursor])
+			if err != nil {
+				m.message = fmt.Sprintf("read failed: %v", err)
+				return m, nil
+			}
+			m.rawChart = string(content)
+			return m.startConversion()
+		}
 	case "esc":
 		m.screen = screenViewChart
 	}
@@ -1009,14 +1069,19 @@ func (m Model) startConversion() (Model, tea.Cmd) {
 		m.message = "no chart to convert — open a chart first"
 		return m, nil
 	}
+	prog := &conversionProgress{}
+	m.convProgress = prog
 	m.converting = true
 	m.message = "converting…"
 	client := m.converter
 	raw := m.rawChart
-	return m, func() tea.Msg {
-		res, err := client.Convert(raw)
+	convCmd := func() tea.Msg {
+		res, err := client.ConvertProgress(raw, func(e aichart.ProgressEvent) {
+			prog.set(fmt.Sprintf("attempt %d/%d: %s", e.Attempt, e.MaxAttempts, e.Message))
+		})
 		return convertDoneMsg{result: res, err: err}
 	}
+	return m, tea.Batch(convCmd, tickConversion())
 }
 
 func (m Model) applyConversion(res aichart.Result, cerr error) Model {
