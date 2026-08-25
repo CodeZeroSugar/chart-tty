@@ -302,6 +302,11 @@ func (m Model) openSetlistBrowser() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateBrowseSetlistsKeys(k string) (tea.Model, tea.Cmd) {
+	if k == m.keys.Home {
+		m.screen = screenMainMenu
+		m.fromMenu = true
+		return m, nil
+	}
 	switch k {
 	case "down", "j":
 		if m.setlistCursor < len(m.setlists)-1 {
@@ -347,6 +352,11 @@ func (m Model) updateBrowseSetlistsKeys(k string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updatePickSetlistKeys(k string) (tea.Model, tea.Cmd) {
+	if k == m.keys.Home {
+		m.screen = screenMainMenu
+		m.fromMenu = true
+		return m, nil
+	}
 	switch k {
 	case "down", "j":
 		if m.setlistCursor < len(m.setlists)-1 {
@@ -392,6 +402,12 @@ func (m Model) updateBrowseChartsKeys(k string) (tea.Model, tea.Cmd) {
 			m.deletePending = ""
 			return m, nil
 		}
+		return m, nil
+	}
+
+	if k == m.keys.Home {
+		m.screen = screenMainMenu
+		m.fromMenu = true
 		return m, nil
 	}
 
@@ -454,6 +470,11 @@ func (m *Model) refreshCharts() {
 }
 
 func (m Model) updateViewSetlistKeys(k string) (tea.Model, tea.Cmd) {
+	if k == m.keys.Home {
+		m.screen = screenMainMenu
+		m.fromMenu = true
+		return m, nil
+	}
 	n := len(m.setlist.charts)
 	if n == 0 {
 		if k == "esc" {
@@ -621,6 +642,10 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 	case k == "s":
 		m = m.saveConvertedChart()
 		return m, nil
+	case k == m.keys.Home:
+		m.screen = screenMainMenu
+		m.fromMenu = true
+		return m, nil
 	case k == "esc":
 		if m.fromMenu {
 			m.screen = screenMainMenu
@@ -697,7 +722,7 @@ func (m Model) View() string {
 	}
 	if m.doc == nil && len(m.lines) == 0 {
 		out := headerRow("chart-tty", m.message, m.messageStyle(), m.width) + "\n\n" +
-			lipgloss.NewStyle().Faint(true).Render("No chart loaded.\nL library · S setlists · q quit")
+			lipgloss.NewStyle().Faint(true).Render("No chart loaded.\nL library · S setlists · h home · q quit")
 		return out
 	}
 	var sb strings.Builder
@@ -734,7 +759,7 @@ func (m Model) View() string {
 
 	if m.showHelp {
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · space/b page · +/- transpose · i save · o open · L library · S setlists · c convert · q quit"))
+		sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k scroll · space/b page · +/- transpose · i save · o open · L library · S setlists · c convert · h home · q quit"))
 	}
 	return sb.String()
 }
@@ -825,7 +850,7 @@ func (m Model) viewBrowseCharts() string {
 		}
 		sb.WriteString("\n")
 	}
-	hint := "j/k move · enter open · s add to setlist · d delete · esc back"
+	hint := "j/k move · enter open · s add to setlist · d delete · esc back · h home"
 	indent := centerBlock(m.width, displayWidth(hint))
 	sb.WriteString("\n")
 	sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(hint))
@@ -916,9 +941,9 @@ func (m Model) viewBrowseSetlists(picking bool) string {
 		}
 		sb.WriteString("\n")
 	}
-	hint := "j/k move · enter open · n new · esc back"
+	hint := "j/k move · enter open · n new · esc back · h home"
 	if picking {
-		hint = "j/k choose · enter add · esc cancel"
+		hint = "j/k choose · enter add · esc cancel · h home"
 	}
 	indent := centerBlock(m.width, displayWidth(hint))
 	sb.WriteString("\n")
@@ -955,7 +980,7 @@ func (m Model) viewSetlist() string {
 		}
 	}
 
-	help := "j/k scroll · space/b next/prev chart · esc back"
+	help := "j/k scroll · space/b next/prev chart · esc back · h home"
 	if m.showHelp {
 		sb.WriteString(lipgloss.NewStyle().Faint(true).Render(help))
 	}
@@ -1010,6 +1035,11 @@ func (m Model) openFilePicker() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updatePickFileKeys(k string) (tea.Model, tea.Cmd) {
+	if k == m.keys.Home {
+		m.screen = screenMainMenu
+		m.fromMenu = true
+		return m, nil
+	}
 	switch k {
 	case "down", "j":
 		if m.pickCursor < len(m.pickFiles)-1 {
@@ -1117,7 +1147,7 @@ func (m Model) viewPickFile() string {
 		}
 		sb.WriteString("\n")
 	}
-	hint := "j/k move · enter open · esc back"
+	hint := "j/k move · enter open · esc back · h home"
 	indent := centerBlock(m.width, displayWidth(hint))
 	sb.WriteString("\n")
 	sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(hint))

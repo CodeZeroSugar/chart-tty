@@ -863,6 +863,76 @@ func TestEscFromViewerReturnsToMenu(t *testing.T) {
 	_ = s
 }
 
+func TestHomeKeyReturnsToMainMenu(t *testing.T) {
+	s := testStore(t)
+	_, _ = s.AddChart("Swing Low", "Artist A", "import", "{title: Swing Low}\n[G]Swing low")
+
+	// h from the chart viewer returns to the menu even when launched with a
+	// file (fromMenu=false).
+	m := update(t, NewDocModel(&parser.Document{Title: "T", Metadata: map[string][]string{}}, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.fromMenu = false
+	m.screen = screenViewChart
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+	if got := m.Screen(); got != "mainMenu" {
+		t.Errorf("h from viewer -> %q, want mainMenu", got)
+	}
+
+	// h from each list screen returns to the menu.
+	views := []struct {
+		name string
+		open func(Model) (Model, tea.Cmd)
+	}{
+		{"browseCharts", func(mm Model) (Model, tea.Cmd) {
+			out, _ := mm.openLibraryBrowser()
+			return out.(Model), nil
+		}},
+		{"browseSetlists", func(mm Model) (Model, tea.Cmd) {
+			_, _ = mm.store.CreateSetlist("One")
+			mm.refreshSetlists()
+			mm.screen = screenBrowseSetlists
+			return mm, nil
+		}},
+		{"viewSetlist", func(mm Model) (Model, tea.Cmd) {
+			mm.setlist = struct {
+				name   string
+				charts []setlistChartView
+				index  int
+			}{name: "One", charts: []setlistChartView{{title: "T", lines: []string{"line"}}}}
+			mm.screen = screenViewSetlist
+			return mm, nil
+		}},
+	}
+	for _, v := range views {
+		t.Run(v.name, func(t *testing.T) {
+			mm := update(t, NewMenuModel(s, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 100, Height: 30})
+			mm, _ = v.open(mm)
+			if mm.Screen() == "mainMenu" {
+				t.Fatalf("setup left model on mainMenu, want a non-menu screen")
+			}
+			mm = update(t, mm, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+			if got := mm.Screen(); got != "mainMenu" {
+				t.Errorf("h from %s -> %q, want mainMenu", v.name, got)
+			}
+		})
+	}
+
+	// The hint advertises h home on non-menu screens.
+	hv := update(t, NewDocModel(&parser.Document{Title: "T", Metadata: map[string][]string{}}, RenderConfig{}).SetShowHelp(true), tea.WindowSizeMsg{Width: 80, Height: 24})
+	if view := hv.View(); !strings.Contains(view, "h home") {
+		t.Errorf("non-menu screen view missing h home hint:\n%s", view)
+	}
+
+	// h on the main menu is a no-op (stays on the menu, does not quit).
+	mm := update(t, NewMenuModel(s, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 100, Height: 30})
+	mm, _ = pressKey(t, mm, "h")
+	if got := mm.Screen(); got != "mainMenu" {
+		t.Errorf("h on main menu -> %q, want mainMenu", got)
+	}
+	if mm.quitting {
+		t.Error("h on main menu set quitting")
+	}
+}
+
 func TestListScreensCenteredLayout(t *testing.T) {
 	s := testStore(t)
 	_, _ = s.AddChart("A Song With A Long Name Here", "", "import", "{title: X}\n[G]y")

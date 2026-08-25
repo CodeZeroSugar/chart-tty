@@ -54,6 +54,7 @@ plain text instead.
 | `o` | Pick a chart file from `./charts` (`.cho .crd .chopro .chord .pro .txt`) |
 | `L` / `S` | Browse the chart library / setlists |
 | `esc` | Return to the main menu (when launched from it) |
+| `h` | Return to the main menu from any screen (home) |
 | `c` | Convert the loaded chart to ChordPro via AI |
 
 Keys are remappable via config; `c` is not.
@@ -206,6 +207,7 @@ scroll_down = "j"
 scroll_up = "k"
 transpose_up = "+"
 transpose_down = "-"
+home = "h"
 
 [library]
 # path = "/somewhere/library.db"   # default: ~/.local/share/chart-tty/library.db

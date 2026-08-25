@@ -41,6 +41,7 @@ type KeyConfig struct {
 	ScrollUp      string `toml:"scroll_up"`
 	TransposeUp   string `toml:"transpose_up"`
 	TransposeDown string `toml:"transpose_down"`
+	Home          string `toml:"home"`
 }
 
 type AIConfig struct {
@@ -58,6 +59,7 @@ func Default() Config {
 			ScrollUp:      "k",
 			TransposeUp:   "+",
 			TransposeDown: "-",
+			Home:          "h",
 		},
 		AI: AIConfig{
 			BaseURL: "https://api.openai.com/v1",
@@ -106,6 +108,7 @@ scroll_down = "j"
 scroll_up = "k"
 transpose_up = "+"
 transpose_down = "-"
+home = "h"
 
 [parser]
 # Chord grammar for user charts: "strict" (default) or "relaxed".
