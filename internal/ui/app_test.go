@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -552,12 +550,12 @@ func TestHeaderRow(t *testing.T) {
 func TestViewMessageRightAligned(t *testing.T) {
 	doc := &parser.Document{Title: "Song", Metadata: map[string][]string{}}
 	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 60, Height: 10})
-	m.message = "converting…"
+	m.message = "saved to library"
 	header := strings.SplitN(m.View(), "\n", 2)[0]
 	if w := displayWidth(header); w != 60 {
 		t.Errorf("header display width = %d, want 60", w)
 	}
-	if !strings.HasSuffix(header, "converting…") {
+	if !strings.HasSuffix(header, "saved to library") {
 		t.Errorf("header %q does not end with the message (right-aligned)", header)
 	}
 }
@@ -663,39 +661,14 @@ func TestConvertNoRawChartMessage(t *testing.T) {
 	}
 }
 
-func TestConversionTickUpdatesMessage(t *testing.T) {
-	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
-	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 80, Height: 10})
-
-	prog := &conversionProgress{}
-	prog.set("attempt 2/3: validating output")
-	m.converting = true
-	m.convProgress = prog
-	m.message = "converting…"
-
-	nm, cmd := m.Update(conversionTickMsg{})
-	m2, ok := nm.(Model)
-	if !ok {
-		t.Fatalf("Update returned %T", nm)
-	}
-	if !strings.Contains(m2.message, "attempt 2/3: validating output") {
-		t.Errorf("message = %q, want live progress text", m2.message)
-	}
-	if cmd == nil {
-		t.Error("tick while converting must reschedule a tick")
-	}
-}
-
-func TestConversionTickStopsAfterDone(t *testing.T) {
-	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
-	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 80, Height: 10})
-	m.converting = false
-	m.convProgress = nil
-
-	_, cmd := m.Update(conversionTickMsg{})
-	if cmd != nil {
-		t.Error("tick after conversion finished must not reschedule")
-	}
+func TestConversionStatusLineLifecycle(t *testing.T) {
+	// The conversion uses the terminal-native StatusLine, not a corner tick.
+	// A non-animated StatusLine (stderr not a TTY in tests) must not hang and
+	// Finish must only fire once.
+	s := NewStatusLine("start")
+	s.Update("attempt 1/3: contacting model")
+	s.Finish("done")
+	s.Finish("done again")
 }
 
 func TestConvertFromLibraryBrowser(t *testing.T) {
@@ -763,77 +736,6 @@ func TestConvertOnSetlistListGivesHint(t *testing.T) {
 	if !strings.Contains(m.View(), "open a setlist first") {
 		t.Errorf("view %q missing hint message", m.View())
 	}
-}
-
-// TestProgramShowsConvertingIndicator runs a real bubbletea program with a
-// slow mock converter and asserts the corner indicator renders while the
-// conversion is in flight, before the final "converted" state.
-func TestProgramShowsConvertingIndicator(t *testing.T) {
-	converted := "{title: Converted Song}\n{start_of_chorus}\nSwing [D]low\n{eoc}"
-	resp, _ := json.Marshal(map[string]any{
-		"choices": []map[string]any{{"message": map[string]any{"content": converted}}},
-	})
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(800 * time.Millisecond)
-		w.Write(resp)
-	}))
-	defer srv.Close()
-	client := &aichart.Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
-
-	doc := &parser.Document{
-		Title:    "Swing Low",
-		Metadata: map[string][]string{},
-		Sections: []parser.Section{{
-			Name:  "chorus",
-			Lines: []parser.ParsedLine{{Type: parser.LineTypeLyric, Raw: "Swing low", Lyrics: "Swing low"}},
-		}},
-	}
-	m := NewDocModel(doc, RenderConfig{}).SetShowHelp(false).SetSource("Swing low").SetConverter(client)
-
-	var out bytes.Buffer
-	p := tea.NewProgram(m, tea.WithInput(strings.NewReader("")), tea.WithOutput(&out))
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		p.Send(tea.WindowSizeMsg{Width: 80, Height: 24})
-		p.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-		time.Sleep(1500 * time.Millisecond)
-		p.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	}()
-	if _, err := p.Run(); err != nil {
-		t.Fatalf("program: %v", err)
-	}
-
-	got := out.String()
-	ci := strings.Index(got, "converting…")
-	cd := strings.Index(got, "converted")
-	if ci < 0 {
-		t.Errorf("program output never rendered converting… (ci=%d):\n%s", ci, got)
-	}
-	if cd < 0 {
-		t.Errorf("program output never rendered converted (cd=%d):\n%s", cd, got)
-	}
-	if ci >= 0 && cd >= 0 && ci > cd {
-		t.Errorf("converting… (%d) appeared after converted (%d):\n%s", ci, cd, got)
-	}
-	braille := false
-	for _, g := range "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" {
-		if strings.ContainsRune(got, g) {
-			braille = true
-			break
-		}
-	}
-	if !braille {
-		t.Errorf("no braille spinner frame rendered during conversion:\n%s", got)
-	}
-}
-
-func TestStatusLineFinishOnce(t *testing.T) {
-	// Non-animated (stderr not a TTY in tests): Update/Finish should not
-	// deadlock and Finish must only fire once.
-	s := NewStatusLine("start")
-	s.Update("attempt 1/3: contacting model")
-	s.Finish("done")
-	s.Finish("done again")
 }
 
 func TestMainMenuRender(t *testing.T) {
@@ -1305,9 +1207,6 @@ func TestModelConvertKey(t *testing.T) {
 	if !m2.converting {
 		t.Error("model not marked converting during conversion")
 	}
-	if !strings.Contains(m2.View(), "converting") {
-		t.Errorf("view %q does not show converting state", m2.View())
-	}
 
 	m3, cdm := runCmd(t, m2, cmd)
 	if cdm.result.Chart == "" {
@@ -1320,11 +1219,8 @@ func TestModelConvertKey(t *testing.T) {
 	if !strings.Contains(view, "Converted Song") {
 		t.Errorf("view %q does not show converted title", view)
 	}
-	if !strings.Contains(view, "converted") && !strings.Contains(view, "converting") {
-		t.Errorf("view %q lost conversion message", view)
-	}
-	if strings.Contains(view, "converting…") {
-		t.Errorf("view %q still shows converting after completion", view)
+	if !strings.Contains(view, "converted") {
+		t.Errorf("view %q lost conversion result message", view)
 	}
 }
 

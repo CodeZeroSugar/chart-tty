@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -43,24 +41,22 @@ const (
 )
 
 type Model struct {
-	lines        []string
-	doc          *parser.Document
-	transpose    int
-	offset       int
-	width        int
-	height       int
-	title        string
-	cfg          RenderConfig
-	keys         config.KeyConfig
-	quitting     bool
-	showHelp     bool
-	rawChart     string
-	converter    *aichart.Client
-	message      string
-	converting   bool
-	convProgress *conversionProgress
-	spinnerIdx   int
-	statusLine   *StatusLine
+	lines      []string
+	doc        *parser.Document
+	transpose  int
+	offset     int
+	width      int
+	height     int
+	title      string
+	cfg        RenderConfig
+	keys       config.KeyConfig
+	quitting   bool
+	showHelp   bool
+	rawChart   string
+	converter  *aichart.Client
+	message    string
+	converting bool
+	statusLine *StatusLine
 
 	chordMode parser.ChordMode
 
@@ -97,33 +93,6 @@ type setlistChartView struct {
 type convertDoneMsg struct {
 	result aichart.Result
 	err    error
-}
-
-// conversionTickMsg prompts the model to refresh the corner status from the
-// live conversion progress.
-type conversionTickMsg struct{}
-
-// conversionProgress holds the latest AI progress event shared between the
-// conversion goroutine and the model's tick handler.
-type conversionProgress struct {
-	mu  sync.Mutex
-	msg string
-}
-
-func (p *conversionProgress) set(m string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.msg = m
-}
-
-func (p *conversionProgress) get() string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.msg
-}
-
-func tickConversion() tea.Cmd {
-	return tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg { return conversionTickMsg{} })
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
@@ -225,7 +194,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 	case convertDoneMsg:
 		m.converting = false
-		m.convProgress = nil
 		if m.statusLine != nil {
 			if msg.err != nil {
 				m.statusLine.Finish("conversion failed")
@@ -240,18 +208,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.width > 0 && m.height > 0 {
 			return m, func() tea.Msg { return tea.WindowSizeMsg{Width: m.width, Height: m.height} }
 		}
-	case conversionTickMsg:
-		if m.converting && m.convProgress != nil {
-			m.spinnerIdx++
-			frame := spinnerFrames[m.spinnerIdx%len(spinnerFrames)]
-			if prog := m.convProgress.get(); prog != "" {
-				m.message = fmt.Sprintf("%s converting… %s", frame, prog)
-			} else {
-				m.message = frame + " converting…"
-			}
-			return m, tickConversion()
-		}
-		return m, nil
 	case tea.KeyMsg:
 		k := msg.String()
 		if k == "ctrl+c" || k == m.keys.Quit {
@@ -1219,12 +1175,9 @@ func headerRow(title, msg string, style lipgloss.Style, width int) string {
 	return lipgloss.NewStyle().Bold(true).Render(title) + strings.Repeat(" ", pad) + style.Render(msg)
 }
 
-// messageStyle returns the status message style: loud bold/yellow while a
-// conversion is in flight, faint otherwise.
+// messageStyle returns the status message style: faint. (Conversion progress
+// is shown by the terminal-native StatusLine, not the corner message.)
 func (m Model) messageStyle() lipgloss.Style {
-	if m.converting {
-		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow"))
-	}
 	return lipgloss.NewStyle().Faint(true)
 }
 
@@ -1332,23 +1285,18 @@ func (m Model) startConversion() (Model, tea.Cmd) {
 		m.message = "no chart to convert — open a chart first"
 		return m, nil
 	}
-	prog := &conversionProgress{}
-	m.convProgress = prog
 	m.converting = true
-	m.spinnerIdx = 0
-	m.message = spinnerFrames[0] + " converting…"
 	m.statusLine = NewStatusLine("sending chart to " + m.converter.Model)
 	client := m.converter
 	raw := m.rawChart
 	sl := m.statusLine
 	convCmd := func() tea.Msg {
 		res, err := client.ConvertProgress(raw, func(e aichart.ProgressEvent) {
-			prog.set(fmt.Sprintf("attempt %d/%d: %s", e.Attempt, e.MaxAttempts, e.Message))
 			sl.Update(fmt.Sprintf("attempt %d/%d: %s", e.Attempt, e.MaxAttempts, e.Message))
 		})
 		return convertDoneMsg{result: res, err: err}
 	}
-	return m, tea.Batch(convCmd, tickConversion())
+	return m, convCmd
 }
 
 func (m Model) applyConversion(res aichart.Result, cerr error) Model {
