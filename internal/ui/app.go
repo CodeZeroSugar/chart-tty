@@ -794,6 +794,18 @@ func centerBlock(width, blockWidth int) int {
 	return indent
 }
 
+// vertPad returns the number of leading blank rows to vertically center a
+// block of height blockH within available rows. Returns 0 when the block
+// fills (or exceeds) the available height — content taller than the screen
+// cannot be centered.
+func vertPad(available, blockH int) int {
+	pad := (available - blockH) / 2
+	if pad < 0 {
+		pad = 0
+	}
+	return pad
+}
+
 func (m Model) viewBrowseCharts() string {
 	var sb strings.Builder
 	// Full-width status header (title-left / message-right).
@@ -804,14 +816,18 @@ func (m Model) viewBrowseCharts() string {
 		banner := fmt.Sprintf("Delete %q? (y/n)", m.deletePending)
 		indent := centerBlock(m.width, displayWidth(banner))
 		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow")).Render(banner))
-		sb.WriteString("\n\n")
-	} else {
 		sb.WriteString("\n")
+		return sb.String()
 	}
 
 	if len(m.browseCharts) == 0 {
 		msg := "(library is empty — import a chart with i from the viewer)"
 		indent := centerBlock(m.width, displayWidth(msg))
+		// Vertically center the single empty-state message below the header.
+		pad := vertPad(m.bodyHeight(), 1)
+		for i := 0; i < pad; i++ {
+			sb.WriteString("\n")
+		}
 		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(msg))
 		return sb.String()
 	}
@@ -824,15 +840,24 @@ func (m Model) viewBrowseCharts() string {
 			blockWidth = w
 		}
 	}
-	title := "Library"
-	titleIndent := centerBlock(m.width, blockWidth) + (blockWidth-displayWidth(title))/2
-	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render(title))
-	sb.WriteString("\n\n")
-
 	listIndent := centerBlock(m.width, blockWidth)
-	bodyHeight := m.bodyHeight() - 4 // header, centered title, blank line, and gap before help
+	titleIndent := listIndent + (blockWidth-displayWidth("Library"))/2
+
+	bodyHeight := m.bodyHeight() - 4 // title row, blank line, and gap before help
 	start := max(m.browseCursor-bodyHeight+1, 0)
 	end := min(start+bodyHeight, len(m.browseCharts))
+	contentRows := end - start
+
+	// Vertically center the whole block (header + title + rows + help) when
+	// there is spare vertical space.
+	blockH := contentRows + 5 // header, blank, title, rows, blank, help
+	pad := vertPad(m.bodyHeight(), blockH)
+	for i := 0; i < pad; i++ {
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render("Library"))
+	sb.WriteString("\n\n")
 
 	for i := start; i < end; i++ {
 		c := m.browseCharts[i]
@@ -845,9 +870,6 @@ func (m Model) viewBrowseCharts() string {
 		sb.WriteString("\n")
 	}
 	hint := "j/k move · enter open · s add to setlist · d delete · esc back"
-	if m.deletePending != "" {
-		hint = "y confirm delete · n/esc cancel"
-	}
 	indent := centerBlock(m.width, displayWidth(hint))
 	sb.WriteString("\n")
 	sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(hint))
@@ -898,6 +920,10 @@ func (m Model) viewBrowseSetlists(picking bool) string {
 	if len(m.setlists) == 0 {
 		msg := "(no setlists — press n to create one)"
 		indent := centerBlock(m.width, displayWidth(msg))
+		pad := vertPad(m.bodyHeight(), 1)
+		for i := 0; i < pad; i++ {
+			sb.WriteString("\n")
+		}
 		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(msg))
 		return sb.String()
 	}
@@ -908,14 +934,22 @@ func (m Model) viewBrowseSetlists(picking bool) string {
 			blockWidth = w
 		}
 	}
-	titleIndent := centerBlock(m.width, blockWidth) + (blockWidth-displayWidth(header))/2
-	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render(header))
-	sb.WriteString("\n\n")
-
 	listIndent := centerBlock(m.width, blockWidth)
+	titleIndent := listIndent + (blockWidth-displayWidth(header))/2
+
 	bodyHeight := m.bodyHeight() - 4
 	start := max(m.setlistCursor-bodyHeight+1, 0)
 	end := min(start+bodyHeight, len(m.setlists))
+	contentRows := end - start
+
+	blockH := contentRows + 5
+	pad := vertPad(m.bodyHeight(), blockH)
+	for i := 0; i < pad; i++ {
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render(header))
+	sb.WriteString("\n\n")
 
 	for i := start; i < end; i++ {
 		sl := m.setlists[i]
@@ -1086,6 +1120,10 @@ func (m Model) viewPickFile() string {
 	if len(m.pickFiles) == 0 {
 		msg := "(no chart files found)"
 		indent := centerBlock(m.width, displayWidth(msg))
+		pad := vertPad(m.bodyHeight(), 1)
+		for i := 0; i < pad; i++ {
+			sb.WriteString("\n")
+		}
 		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(msg))
 		return sb.String()
 	}
@@ -1098,15 +1136,23 @@ func (m Model) viewPickFile() string {
 			blockWidth = w
 		}
 	}
-	title := "Pick a chart"
-	titleIndent := centerBlock(m.width, blockWidth) + (blockWidth-displayWidth(title))/2
-	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render(title))
-	sb.WriteString("\n\n")
-
 	listIndent := centerBlock(m.width, blockWidth)
+	titleIndent := listIndent + (blockWidth-displayWidth("Pick a chart"))/2
+
 	rows := max(m.bodyHeight()-4, 1)
 	start := max(m.pickCursor-rows+1, 0)
 	end := min(start+rows, len(m.pickFiles))
+	contentRows := end - start
+
+	blockH := contentRows + 5
+	pad := vertPad(m.bodyHeight(), blockH)
+	for i := 0; i < pad; i++ {
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render("Pick a chart"))
+	sb.WriteString("\n\n")
+
 	for i := start; i < end; i++ {
 		if i == m.pickCursor {
 			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Bold(true).Render("> "+names[i]))

@@ -1008,6 +1008,23 @@ func TestListScreensCenteredLayout(t *testing.T) {
 	if lastIndent <= 0 {
 		t.Errorf("list rows not centered (indent %d)", lastIndent)
 	}
+
+	// Vertical centering: with a tall terminal and few items, the centered
+	// title should sit well below the header row (padding in between), not
+	// immediately at row 1.
+	titleRow := -1
+	for i, ln := range lines {
+		if strings.TrimSpace(ln) == "Library" {
+			leading := len(ln) - len(strings.TrimLeft(ln, " "))
+			if leading > 0 {
+				titleRow = i
+				break
+			}
+		}
+	}
+	if titleRow <= 1 {
+		t.Errorf("centered title at row %d, want vertical padding below the header (row > 1)", titleRow)
+	}
 }
 
 func TestDeleteChartFromBrowser(t *testing.T) {
