@@ -19,6 +19,10 @@ ChordPro chart for optimal rendering! (Generative AI is non-deterministic, resul
 
 If you are a tech-savvy individual who doesn't use a tablet for displaying charts (Huh?) then this may be the solution for you!
 
+## Demo
+
+![App Demo](./docs/demo.gif)
+
 ## Install
 
 Requires [Go 1.26+](https://go.dev/).
