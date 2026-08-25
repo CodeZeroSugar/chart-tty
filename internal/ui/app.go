@@ -23,12 +23,23 @@ import (
 type screen int
 
 const (
-	screenViewChart screen = iota
+	screenMainMenu screen = iota
+	screenViewChart
 	screenBrowseCharts
 	screenBrowseSetlists
 	screenPickSetlist
 	screenViewSetlist
 	screenPickFile
+)
+
+// menuItem is one selectable main-menu entry.
+type menuItem int
+
+const (
+	menuLibrary menuItem = iota
+	menuSetlists
+	menuOpen
+	menuExit
 )
 
 type Model struct {
@@ -55,19 +66,21 @@ type Model struct {
 
 	lastConverted string
 
-	screen        screen
-	store         *db.Store
-	browseCharts  []db.ChartMeta
-	browseCursor  int
-	deletePending string // title awaiting y/n confirmation
-	setlists      []db.SetlistMeta
-	setlistCursor int
-	inputMode     bool
-	nameInput     textinput.Model
-	pickDir       string
-	pickFiles     []string
-	pickCursor    int
-	setlist       struct {
+	screen           screen
+	store            *db.Store
+	browseCharts     []db.ChartMeta
+	browseCursor     int
+	deletePending    string // title awaiting y/n confirmation
+	setlists         []db.SetlistMeta
+	setlistCursor    int
+	inputMode        bool
+	nameInput        textinput.Model
+	pickDir          string
+	pickFiles        []string
+	pickCursor       int
+	menuIndex        int
+	menuOpenFromMenu bool
+	setlist          struct {
 		name   string
 		charts []setlistChartView
 		index  int
@@ -114,7 +127,7 @@ func tickConversion() tea.Cmd {
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
-	return Model{lines: lines, cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode()}
+	return Model{lines: lines, cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode(), screen: screenViewChart}
 }
 
 func NewDocModel(doc *parser.Document, cfg RenderConfig) Model {
@@ -139,6 +152,31 @@ func NewLibraryModel(store *db.Store, cfg RenderConfig) Model {
 	m.nameInput = ti
 	return m
 }
+
+// NewMenuModel launches the TUI on the centered main menu.
+func NewMenuModel(store *db.Store, cfg RenderConfig) Model {
+	m := NewModel(nil, cfg)
+	m.store = store
+	m.screen = screenMainMenu
+	m.menuIndex = 0
+	ti := textinput.New()
+	ti.Placeholder = "setlist name"
+	ti.CharLimit = 60
+	m.nameInput = ti
+	return m
+}
+
+// menuArt is the "CHORD-TTY" block-letter banner (hand-drawn).
+var menuArt = []string{
+	" ██████╗██╗  ██╗ ██████╗ ██████╗ ██████╗    ████████╗████████╗██╗   ██╗",
+	"██╔════╝██║  ██║██╔═══██╗██╔══██╗██╔══██╗   ╚══██╔══╝╚══██╔══╝╚██╗ ██╔╝",
+	"██║     ███████║██║   ██║██████╔╝██║  ██║      ██║      ██║    ╚████╔╝ ",
+	"██║     ██╔══██║██║   ██║██╔══██╗██║  ██║      ██║      ██║     ╚██╔╝  ",
+	"╚██████╗██║  ██║╚██████╔╝██║  ██║██████╔╝      ██║      ██║      ██║   ",
+	" ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝       ╚═╝      ╚═╝      ╚═╝   ",
+}
+
+var menuOptions = []string{"Library", "Setlists", "Open", "Exit"}
 
 func (m Model) SetKeys(keys config.KeyConfig) Model {
 	m.keys = keys
@@ -237,6 +275,8 @@ func (m Model) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	k := key.String()
 
 	switch m.screen {
+	case screenMainMenu:
+		return m.updateMainMenuKeys(k)
 	case screenBrowseCharts:
 		return m.updateBrowseChartsKeys(k)
 	case screenBrowseSetlists:
@@ -682,6 +722,8 @@ func (m Model) visibleRows() int {
 
 func (m Model) View() string {
 	switch m.screen {
+	case screenMainMenu:
+		return m.viewMainMenu()
 	case screenBrowseCharts:
 		return m.viewBrowseCharts()
 	case screenBrowseSetlists, screenPickSetlist:
@@ -951,7 +993,12 @@ func (m Model) updatePickFileKeys(k string) (tea.Model, tea.Cmd) {
 			return m.startConversion()
 		}
 	case "esc":
-		m.screen = screenViewChart
+		if m.menuOpenFromMenu {
+			m.screen = screenMainMenu
+			m.menuOpenFromMenu = false
+		} else {
+			m.screen = screenViewChart
+		}
 	}
 	return m, nil
 }
@@ -1064,6 +1111,78 @@ func (m Model) messageStyle() lipgloss.Style {
 		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow"))
 	}
 	return lipgloss.NewStyle().Faint(true)
+}
+
+func (m Model) viewMainMenu() string {
+	var sb strings.Builder
+	width := max(m.width, 1)
+
+	// Vertically center: art (6) + gap + 4 options + gap + help.
+	total := len(menuArt) + 1 + len(menuOptions) + 1 + 1
+	topPad := max((m.bodyHeight()-total)/2, 1)
+	for i := 0; i < topPad; i++ {
+		sb.WriteString("\n")
+	}
+
+	for _, row := range menuArt {
+		pad := max((width-displayWidth(row))/2, 0)
+		sb.WriteString(strings.Repeat(" ", pad))
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render(row))
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+
+	optPad := max((width-10)/2, 0) // center around the widest option
+	for i, opt := range menuOptions {
+		row := opt
+		if i == m.menuIndex {
+			row = "> " + opt
+			sb.WriteString(strings.Repeat(" ", optPad))
+			sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow")).Render(row))
+		} else {
+			sb.WriteString(strings.Repeat(" ", optPad))
+			sb.WriteString(lipgloss.NewStyle().Faint(true).Render("  " + opt))
+		}
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+	sb.WriteString(lipgloss.NewStyle().Faint(true).Render(center("j/k move · enter select · q quit", width)))
+	return sb.String()
+}
+
+func center(s string, width int) string {
+	pad := max((width-displayWidth(s))/2, 0)
+	return strings.Repeat(" ", pad) + s
+}
+
+func (m Model) updateMainMenuKeys(k string) (tea.Model, tea.Cmd) {
+	switch k {
+	case "down", "j":
+		if m.menuIndex < len(menuOptions)-1 {
+			m.menuIndex++
+		}
+	case "up", "k":
+		if m.menuIndex > 0 {
+			m.menuIndex--
+		}
+	case "enter":
+		switch menuItem(m.menuIndex) {
+		case menuLibrary:
+			return m.openLibraryBrowser()
+		case menuSetlists:
+			return m.openSetlistBrowser()
+		case menuOpen:
+			m.menuOpenFromMenu = true
+			return m.openFilePicker()
+		case menuExit:
+			m.quitting = true
+			return m, tea.Quit
+		}
+	case "q", "esc", "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	}
+	return m, nil
 }
 
 // body returns the rendered lines visible at the current offset. In
@@ -1188,9 +1307,14 @@ func (m Model) Transpose() int { return m.transpose }
 // ChordMode reports the active strict/relaxed grammar, for tests.
 func (m Model) ChordMode() parser.ChordMode { return m.chordMode }
 
+// MenuIndex reports the highlighted main-menu entry, for tests.
+func (m Model) MenuIndex() int { return m.menuIndex }
+
 // Screen reports the current screen, for tests.
 func (m Model) Screen() string {
 	switch m.screen {
+	case screenMainMenu:
+		return "mainMenu"
 	case screenBrowseCharts:
 		return "browseCharts"
 	case screenBrowseSetlists:

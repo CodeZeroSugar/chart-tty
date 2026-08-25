@@ -836,6 +836,107 @@ func TestStatusLineFinishOnce(t *testing.T) {
 	s.Finish("done again")
 }
 
+func TestMainMenuRender(t *testing.T) {
+	s := testStore(t)
+	m := update(t, NewMenuModel(s, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 100, Height: 30})
+	if got := m.Screen(); got != "mainMenu" {
+		t.Fatalf("screen = %q, want mainMenu", got)
+	}
+	view := m.View()
+	if !strings.Contains(view, "CHORD-TTY") && !strings.Contains(view, "╔════") && !strings.Contains(view, "████") {
+		t.Errorf("view missing block-letter banner:\n%s", view)
+	}
+	for _, opt := range []string{"Library", "Setlists", "Open", "Exit"} {
+		if !strings.Contains(view, opt) {
+			t.Errorf("view missing option %q:\n%s", opt, view)
+		}
+	}
+	if !strings.Contains(view, "> Library") {
+		t.Errorf("view missing cursor on first option:\n%s", view)
+	}
+}
+
+func TestMainMenuNavigation(t *testing.T) {
+	s := testStore(t)
+	m := update(t, NewMenuModel(s, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 100, Height: 30})
+	if m.MenuIndex() != 0 {
+		t.Fatalf("initial menu index = %d, want 0", m.MenuIndex())
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if m.MenuIndex() != 1 {
+		t.Errorf("after j index = %d, want 1", m.MenuIndex())
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if m.MenuIndex() != 3 {
+		t.Errorf("after 3x j index = %d, want 3 (Exit)", m.MenuIndex())
+	}
+	// At the last option, further j clamps.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if m.MenuIndex() != 3 {
+		t.Errorf("after j at bottom index = %d, want 3", m.MenuIndex())
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	if m.MenuIndex() != 2 {
+		t.Errorf("after k index = %d, want 2", m.MenuIndex())
+	}
+}
+
+func TestMainMenuDispatch(t *testing.T) {
+	s := testStore(t)
+	openMenu := func() Model {
+		m := update(t, NewMenuModel(s, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 100, Height: 30})
+		return m
+	}
+
+	// Library.
+	m := openMenu()
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.Screen(); got != "browseCharts" {
+		t.Errorf("Library enter -> %q, want browseCharts", got)
+	}
+
+	// Setlists.
+	m = openMenu()
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.Screen(); got != "browseSetlists" {
+		t.Errorf("Setlists enter -> %q, want browseSetlists", got)
+	}
+
+	// Open.
+	m = openMenu()
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.Screen(); got != "pickFile" {
+		t.Errorf("Open enter -> %q, want pickFile", got)
+	}
+	// esc from the picker returns to the menu.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	if got := m.Screen(); got != "mainMenu" {
+		t.Errorf("picker esc -> %q, want mainMenu", got)
+	}
+
+	// Exit via enter and via q.
+	m = openMenu()
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m2, ok := nm.(Model)
+	if !ok || !m2.Quitting() || cmd == nil {
+		t.Errorf("Exit enter: quitting=%v cmdNil=%v, want both set", m2.Quitting(), cmd == nil)
+	}
+
+	m = openMenu()
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if !m.Quitting() {
+		t.Error("q should quit from the menu")
+	}
+}
+
 func TestDeleteChartFromBrowser(t *testing.T) {
 	s := testStore(t)
 	id1, _ := s.AddChart("Keep Me", "", "import", "{title: Keep Me}\n[G]x")

@@ -18,8 +18,10 @@ go build ./cmd/chart-tty
 chart-tty [flags] <chart file>
 ```
 
-On a terminal, `chart-tty` opens an interactive viewer. When stdout is piped, it prints the
-rendered chart as plain text instead.
+On a terminal, `chart-tty` opens an interactive viewer. Running it with no arguments
+opens a centered main menu with a big block-letter **CHORD-TTY** title and the options
+**Library · Setlists · Open · Exit**. When stdout is piped, it prints the rendered chart as
+plain text instead.
 
 ### Flags
 

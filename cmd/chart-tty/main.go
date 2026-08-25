@@ -222,7 +222,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer store.Close()
-		m := ui.NewLibraryModel(store, rcfg).SetKeys(appCfg.Keys).SetConverter(&aiClient)
+		m := ui.NewMenuModel(store, rcfg).SetKeys(appCfg.Keys).SetConverter(&aiClient)
 		if err := ui.RunModel(m); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: TUI failed: %v\n", err)
 			os.Exit(1)
