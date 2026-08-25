@@ -147,6 +147,9 @@ func (c Chord) Transpose(n int) Chord {
 }
 
 func (d *Document) Transpose(n int) {
+	if c, err := ParseChord(d.Key); err == nil {
+		d.Key = c.Transpose(n).String()
+	}
 	for i := range d.Sections {
 		for j := range d.Sections[i].Lines {
 			line := &d.Sections[i].Lines[j]

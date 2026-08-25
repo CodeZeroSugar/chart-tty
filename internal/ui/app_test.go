@@ -230,7 +230,7 @@ func TestNewDocModel(t *testing.T) {
 	if m.title != "Swing Low" {
 		t.Errorf("title = %q, want %q", m.title, "Swing Low")
 	}
-	wantLines := []string{"[chorus]", "      D  ", "Swing low"}
+	wantLines := []string{"Swing Low", "", "[chorus]", "      D  ", "Swing low"}
 	if !reflect.DeepEqual(m.lines, wantLines) {
 		t.Errorf("lines = %#v, want %#v", m.lines, wantLines)
 	}

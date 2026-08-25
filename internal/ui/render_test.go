@@ -59,6 +59,8 @@ func TestRenderMixedSection(t *testing.T) {
 	}
 
 	want := []string{
+		"Swing Low",
+		"",
 		"[chorus]",
 		"      D  ",
 		"Swing low",
@@ -153,6 +155,69 @@ func TestRenderEmptyDocument(t *testing.T) {
 	doc := &parser.Document{Metadata: map[string][]string{}}
 	if got := Render(doc, RenderConfig{}); len(got) != 0 {
 		t.Errorf("Render() = %#v, want empty", got)
+	}
+}
+
+func TestRenderMetaBlock(t *testing.T) {
+	doc := &parser.Document{
+		Title:    "Long Road Home",
+		Artist:   "Chart TTY",
+		Key:      "G",
+		Tempo:    "112",
+		Capo:     "2",
+		Metadata: map[string][]string{"time": {"4/4"}},
+		Sections: []parser.Section{{
+			Name:  "verse",
+			Lines: []parser.ParsedLine{{Type: parser.LineTypeLyric, Raw: "Home", Lyrics: "Home"}},
+		}},
+	}
+
+	got := Render(doc, RenderConfig{})
+	want := []string{
+		"Long Road Home",
+		"Chart TTY",
+		"Capo: 2 · Key: G · Tempo: 112 · Time: 4/4",
+		"",
+		"[verse]",
+		"Home",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Render() = %#v, want %#v", got, want)
+	}
+}
+
+func TestRenderMetaBlockOmittedWhenEmpty(t *testing.T) {
+	doc := &parser.Document{
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{{
+			Name:  "verse",
+			Lines: []parser.ParsedLine{{Type: parser.LineTypeLyric, Raw: "x", Lyrics: "x"}},
+		}},
+	}
+	got := Render(doc, RenderConfig{})
+	want := []string{"[verse]", "x"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Render() = %#v, want %#v", got, want)
+	}
+}
+
+func TestMetaLinePresentOnly(t *testing.T) {
+	tests := []struct {
+		name string
+		doc  *parser.Document
+		want string
+	}{
+		{"all present", &parser.Document{Capo: "2", Key: "G", Tempo: "112", Metadata: map[string][]string{"time": {"4/4"}, "duration": {"3:00"}}},
+			"Capo: 2 · Key: G · Tempo: 112 · Time: 4/4 · Duration: 3:00"},
+		{"only capo", &parser.Document{Capo: "5", Metadata: map[string][]string{}}, "Capo: 5"},
+		{"none", &parser.Document{Metadata: map[string][]string{}}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := metaLine(tt.doc); got != tt.want {
+				t.Errorf("metaLine() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

@@ -29,6 +29,10 @@ func RenderConfigFromConfig(cfg config.Config) RenderConfig {
 
 func Render(doc *parser.Document, cfg RenderConfig) []string {
 	var out []string
+	if block := renderMetaBlock(doc, cfg); len(block) > 0 {
+		out = append(out, block...)
+		out = append(out, "")
+	}
 	for i, sec := range doc.Sections {
 		if i > 0 {
 			out = append(out, "")
@@ -52,6 +56,46 @@ func Render(doc *parser.Document, cfg RenderConfig) []string {
 		}
 	}
 	return out
+}
+
+// renderMetaBlock returns the lines shown before the song starts: the title,
+// the artist (subtitle), and the performance metadata that is present. It
+// returns nil when the document has no metadata to show.
+func renderMetaBlock(doc *parser.Document, cfg RenderConfig) []string {
+	var out []string
+	faint := lipgloss.NewStyle().Faint(true)
+	if doc.Title != "" {
+		out = append(out, applyStyle(doc.Title, cfg.HeaderStyle))
+	}
+	if doc.Artist != "" {
+		out = append(out, faint.Render(doc.Artist))
+	}
+	if meta := metaLine(doc); meta != "" {
+		out = append(out, faint.Render(meta))
+	}
+	return out
+}
+
+// metaLine joins the present performance metadata into a single line:
+// Capo · Key · Tempo · Time · Duration, in that order.
+func metaLine(doc *parser.Document) string {
+	parts := make([]string, 0, 5)
+	if doc.Capo != "" {
+		parts = append(parts, "Capo: "+doc.Capo)
+	}
+	if doc.Key != "" {
+		parts = append(parts, "Key: "+doc.Key)
+	}
+	if doc.Tempo != "" {
+		parts = append(parts, "Tempo: "+doc.Tempo)
+	}
+	if t := strings.Join(doc.Metadata["time"], ", "); t != "" {
+		parts = append(parts, "Time: "+t)
+	}
+	if d := strings.Join(doc.Metadata["duration"], ", "); d != "" {
+		parts = append(parts, "Duration: "+d)
+	}
+	return strings.Join(parts, " · ")
 }
 
 func chordRow(lyrics string, chords []parser.ChordToken) string {

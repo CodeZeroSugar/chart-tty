@@ -1293,14 +1293,10 @@ func (m Model) body() []string {
 }
 
 func (m Model) currentKey() string {
-	if m.doc == nil || m.doc.Key == "" {
+	if m.doc == nil {
 		return ""
 	}
-	c, err := parser.ParseChord(m.doc.Key)
-	if err != nil {
-		return m.doc.Key
-	}
-	return c.Transpose(m.transpose).String()
+	return m.doc.Key
 }
 
 func (m Model) startConversion() (Model, tea.Cmd) {

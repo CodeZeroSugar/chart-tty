@@ -272,12 +272,15 @@ func TestDocumentTranspose(t *testing.T) {
 			t.Errorf("chords[%d].Position = %d, want %d", i, chords[i].Position, want[i].Position)
 		}
 	}
-	if doc.Key != "C" {
-		t.Errorf("Key mutated to %q, want original %q", doc.Key, "C")
+	if doc.Key != "D" {
+		t.Errorf("Key = %q, want transposed %q", doc.Key, "D")
 	}
 
 	doc.Transpose(-2)
 	if chords[0].Name != "C" || chords[1].Name != "G" {
 		t.Errorf("roundtrip transpose chords = %q, %q, want %q, %q", chords[0].Name, chords[1].Name, "C", "G")
+	}
+	if doc.Key != "C" {
+		t.Errorf("roundtrip transpose key = %q, want %q", doc.Key, "C")
 	}
 }
