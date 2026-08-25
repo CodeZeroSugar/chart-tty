@@ -721,7 +721,7 @@ func (m Model) View() string {
 		return m.viewPickFile()
 	}
 	if m.doc == nil && len(m.lines) == 0 {
-		out := headerRow("chart-tty", m.message, m.messageStyle(), m.width) + "\n\n" +
+		out := headerRow("chart-tty", m.message, m.cfg.TitleStyle, m.messageStyle(), m.width) + "\n\n" +
 			lipgloss.NewStyle().Faint(true).Render("No chart loaded.\nL library · S setlists · h home · q quit")
 		return out
 	}
@@ -731,7 +731,7 @@ func (m Model) View() string {
 		title += " · Key: " + k
 	}
 	if title != "" || m.message != "" {
-		sb.WriteString(headerRow(title, m.message, m.messageStyle(), m.width))
+		sb.WriteString(headerRow(title, m.message, m.cfg.TitleStyle, m.messageStyle(), m.width))
 		sb.WriteString("\n")
 	}
 
@@ -790,13 +790,13 @@ func vertPad(available, blockH int) int {
 func (m Model) viewBrowseCharts() string {
 	var sb strings.Builder
 	// Full-width status header (title-left / message-right).
-	sb.WriteString(headerRow("Library", m.message, m.messageStyle(), m.width))
+	sb.WriteString(headerRow("Library", m.message, m.cfg.TitleStyle, m.messageStyle(), m.width))
 	sb.WriteString("\n")
 
 	if m.deletePending != "" {
 		banner := fmt.Sprintf("Delete %q? (y/n)", m.deletePending)
 		indent := centerBlock(m.width, displayWidth(banner))
-		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow")).Render(banner))
+		sb.WriteString(strings.Repeat(" ", indent) + m.cfg.HighlightStyle.Render(banner))
 		sb.WriteString("\n")
 		return sb.String()
 	}
@@ -837,14 +837,14 @@ func (m Model) viewBrowseCharts() string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render("Library"))
+	sb.WriteString(strings.Repeat(" ", titleIndent) + m.cfg.TitleStyle.Render("Library"))
 	sb.WriteString("\n\n")
 
 	for i := start; i < end; i++ {
 		c := m.browseCharts[i]
 		text := fmt.Sprintf("%s %s — %s [%s]", c.Title, c.Artist, c.Source, c.UpdatedAt.Format("2006-01-02"))
 		if i == m.browseCursor {
-			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Bold(true).Render("> "+text))
+			sb.WriteString(strings.Repeat(" ", listIndent) + m.cfg.HighlightStyle.Render("> "+text))
 		} else {
 			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Faint(true).Render("  "+text))
 		}
@@ -887,7 +887,7 @@ func (m Model) viewBrowseSetlists(picking bool) string {
 	if picking {
 		header = "Add \"" + m.browseCharts[m.browseCursor].Title + "\" to:"
 	}
-	sb.WriteString(headerRow(header, m.message, m.messageStyle(), m.width))
+	sb.WriteString(headerRow(header, m.message, m.cfg.TitleStyle, m.messageStyle(), m.width))
 	sb.WriteString("\n")
 
 	if m.inputMode {
@@ -929,13 +929,13 @@ func (m Model) viewBrowseSetlists(picking bool) string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render(header))
+	sb.WriteString(strings.Repeat(" ", titleIndent) + m.cfg.TitleStyle.Render(header))
 	sb.WriteString("\n\n")
 
 	for i := start; i < end; i++ {
 		sl := m.setlists[i]
 		if i == m.setlistCursor {
-			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Bold(true).Render("> "+sl.Name))
+			sb.WriteString(strings.Repeat(" ", listIndent) + m.cfg.HighlightStyle.Render("> "+sl.Name))
 		} else {
 			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Faint(true).Render("  "+sl.Name))
 		}
@@ -966,7 +966,7 @@ func (m Model) viewSetlist() string {
 		curTitle = m.setlist.charts[m.setlist.index].title
 	}
 	header := fmt.Sprintf("%s ─ chart %s ─ %s%s", name, pos, curTitle, keySuffix)
-	sb.WriteString(headerRow(strings.TrimPrefix(strings.TrimRight(header, " "), "─ "), m.message, m.messageStyle(), m.width))
+	sb.WriteString(headerRow(strings.TrimPrefix(strings.TrimRight(header, " "), "─ "), m.message, m.cfg.TitleStyle, m.messageStyle(), m.width))
 	sb.WriteString("\n")
 
 	if m.setlist.index < len(m.setlist.charts) {
@@ -1100,7 +1100,7 @@ func (m Model) openDiskFile(path string) (tea.Model, tea.Cmd) {
 // viewPickFile renders the filesystem chart list.
 func (m Model) viewPickFile() string {
 	var sb strings.Builder
-	sb.WriteString(headerRow("Pick a chart  "+m.pickDir, m.message, m.messageStyle(), m.width))
+	sb.WriteString(headerRow("Pick a chart  "+m.pickDir, m.message, m.cfg.TitleStyle, m.messageStyle(), m.width))
 	sb.WriteString("\n")
 
 	if len(m.pickFiles) == 0 {
@@ -1136,12 +1136,12 @@ func (m Model) viewPickFile() string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render("Pick a chart"))
+	sb.WriteString(strings.Repeat(" ", titleIndent) + m.cfg.TitleStyle.Render("Pick a chart"))
 	sb.WriteString("\n\n")
 
 	for i := start; i < end; i++ {
 		if i == m.pickCursor {
-			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Bold(true).Render("> "+names[i]))
+			sb.WriteString(strings.Repeat(" ", listIndent) + m.cfg.HighlightStyle.Render("> "+names[i]))
 		} else {
 			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Faint(true).Render("  "+names[i]))
 		}
@@ -1180,12 +1180,12 @@ func truncateTo(s string, w int) string {
 // headerRow lays the title left-aligned and the status message right-aligned
 // on the same line, truncating with an ellipsis when they collide. The result
 // is exactly width cells wide.
-func headerRow(title, msg string, style lipgloss.Style, width int) string {
+func headerRow(title, msg string, titleStyle, style lipgloss.Style, width int) string {
 	if width < 1 {
 		width = 1
 	}
 	if msg == "" {
-		return lipgloss.NewStyle().Bold(true).Render(truncateTo(title, width))
+		return titleStyle.Render(truncateTo(title, width))
 	}
 	const gap = 3
 	title = truncateTo(title, width-gap)
@@ -1202,7 +1202,7 @@ func headerRow(title, msg string, style lipgloss.Style, width int) string {
 	}
 	msg = truncateTo(msg, msgW)
 	pad := width - titleW - displayWidth(msg)
-	return lipgloss.NewStyle().Bold(true).Render(title) + strings.Repeat(" ", pad) + style.Render(msg)
+	return titleStyle.Render(title) + strings.Repeat(" ", pad) + style.Render(msg)
 }
 
 // messageStyle returns the status message style: faint. (Conversion progress
@@ -1225,7 +1225,7 @@ func (m Model) viewMainMenu() string {
 	for _, row := range menuArt {
 		pad := max((width-displayWidth(row))/2, 0)
 		sb.WriteString(strings.Repeat(" ", pad))
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Render(row))
+		sb.WriteString(m.cfg.BannerStyle.Render(row))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
@@ -1236,7 +1236,7 @@ func (m Model) viewMainMenu() string {
 		if i == m.menuIndex {
 			row = "> " + opt
 			sb.WriteString(strings.Repeat(" ", optPad))
-			sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow")).Render(row))
+			sb.WriteString(m.cfg.HighlightStyle.Render(row))
 		} else {
 			sb.WriteString(strings.Repeat(" ", optPad))
 			sb.WriteString(lipgloss.NewStyle().Faint(true).Render("  " + opt))

@@ -523,7 +523,7 @@ func TestHeaderRow(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			row := headerRow(tt.title, tt.msg, lipgloss.NewStyle().Faint(true), tt.width)
+			row := headerRow(tt.title, tt.msg, lipgloss.NewStyle().Bold(true), lipgloss.NewStyle().Faint(true), tt.width)
 			if tt.msg == "" {
 				// Title-only row is unpadded; the message case is padded.
 				if !strings.Contains(row, tt.title) {
@@ -755,6 +755,56 @@ func TestMainMenuRender(t *testing.T) {
 	}
 	if !strings.Contains(view, "> Library") {
 		t.Errorf("view missing cursor on first option:\n%s", view)
+	}
+}
+
+func TestThemeChromeStyles(t *testing.T) {
+	cfg := config.Default()
+	cfg.Theme.HeaderColor = "red"
+	cfg.Theme.CommentColor = "green"
+	cfg.Theme.HighlightColor = "blue"
+	rcfg := RenderConfigFromConfig(cfg)
+
+	// Main menu: banner and selected option take the theme colors.
+	s := testStore(t)
+	mm := update(t, NewMenuModel(s, rcfg).SetShowHelp(false), tea.WindowSizeMsg{Width: 100, Height: 30})
+	menu := mm.View()
+	if !strings.Contains(menu, rcfg.BannerStyle.Render(menuArt[0])) {
+		t.Errorf("main menu banner not styled with header_color red:\n%s", menu)
+	}
+	if !strings.Contains(menu, rcfg.HighlightStyle.Render("> Library")) {
+		t.Errorf("main menu selection not styled with highlight_color blue:\n%s", menu)
+	}
+
+	// Viewer header title takes header_color.
+	doc := &parser.Document{
+		Title:    "Swing Low",
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{{
+			Name:  "chorus",
+			Lines: []parser.ParsedLine{{Type: parser.LineTypeLyric, Raw: "Swing low", Lyrics: "Swing low"}},
+		}},
+	}
+	vm := update(t, NewDocModel(doc, rcfg).SetShowHelp(false), tea.WindowSizeMsg{Width: 80, Height: 24})
+	view := vm.View()
+	if !strings.Contains(view, rcfg.TitleStyle.Render("Swing Low")) {
+		t.Errorf("viewer header title not styled with header_color:\n%s", view)
+	}
+	if !strings.Contains(view, rcfg.HeaderStyle.Render("[chorus]")) {
+		t.Errorf("section header not styled with header_color:\n%s", view)
+	}
+
+	// Library screen: centered title and cursor row use theme colors.
+	_, _ = s.AddChart("Song A", "", "import", "{title: A}\n[G]x")
+	_, _ = s.AddChart("Song B", "", "import", "{title: B}\n[C]y")
+	lm, _ := mm.openLibraryBrowser()
+	lmv := update(t, lm.(Model), tea.WindowSizeMsg{Width: 100, Height: 30})
+	lib := lmv.View()
+	if !strings.Contains(lib, rcfg.TitleStyle.Render("Library")) {
+		t.Errorf("library title not styled with header_color:\n%s", lib)
+	}
+	if !strings.Contains(lib, rcfg.HighlightStyle.Render("> Song B")) {
+		t.Errorf("library cursor row not styled with highlight_color:\n%s", lib)
 	}
 }
 

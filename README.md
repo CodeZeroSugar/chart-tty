@@ -211,8 +211,9 @@ All fields are optional; unset fields fall back to defaults.
 
 ```toml
 [theme]
-header_color = "cyan"    # lipgloss color name for section headers
-comment_color = "yellow" # lipgloss color name for comments
+header_color = "cyan"     # section headers, titles, status bar, main menu banner
+comment_color = "yellow"  # {comment:} directive text
+highlight_color = "yellow" # selected row / cursor / delete banner
 
 [keys]
 quit = "q"

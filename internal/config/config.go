@@ -31,8 +31,9 @@ type LibraryConfig struct {
 }
 
 type ThemeConfig struct {
-	HeaderColor  string `toml:"header_color"`
-	CommentColor string `toml:"comment_color"`
+	HeaderColor    string `toml:"header_color"`
+	CommentColor   string `toml:"comment_color"`
+	HighlightColor string `toml:"highlight_color"`
 }
 
 type KeyConfig struct {
@@ -52,7 +53,7 @@ type AIConfig struct {
 
 func Default() Config {
 	return Config{
-		Theme: ThemeConfig{HeaderColor: "cyan", CommentColor: "yellow"},
+		Theme: ThemeConfig{HeaderColor: "cyan", CommentColor: "yellow", HighlightColor: "yellow"},
 		Keys: KeyConfig{
 			Quit:          "q",
 			ScrollDown:    "j",
@@ -98,8 +99,9 @@ const defaultTemplate = `# chart-tty configuration
 [theme]
 # lipgloss color names: red, green, yellow, blue, magenta, cyan, white, gray,
 # or ANSI numbers 0-255 ("196"), or hex "#ff8800"
-header_color = "cyan"    # section headers like [chorus]
+header_color = "cyan"    # section headers like [chorus], titles, main menu banner
 comment_color = "yellow" # {comment:} directive text
+highlight_color = "yellow" # selected row / cursor / delete banner
 
 [keys]
 # Single-key names as bubbletea reports them

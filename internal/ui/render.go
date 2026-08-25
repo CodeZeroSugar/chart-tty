@@ -10,14 +10,20 @@ import (
 )
 
 type RenderConfig struct {
-	HeaderStyle  lipgloss.Style
-	CommentStyle lipgloss.Style
+	HeaderStyle    lipgloss.Style
+	CommentStyle   lipgloss.Style
+	BannerStyle    lipgloss.Style
+	TitleStyle     lipgloss.Style
+	HighlightStyle lipgloss.Style
 }
 
 func RenderConfigFromConfig(cfg config.Config) RenderConfig {
 	return RenderConfig{
-		HeaderStyle:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HeaderColor)),
-		CommentStyle: lipgloss.NewStyle().Foreground(lipgloss.Color(cfg.Theme.CommentColor)),
+		HeaderStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HeaderColor)),
+		CommentStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color(cfg.Theme.CommentColor)),
+		BannerStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HeaderColor)),
+		TitleStyle:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HeaderColor)),
+		HighlightStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HighlightColor)),
 	}
 }
 

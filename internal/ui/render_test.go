@@ -134,6 +134,8 @@ func TestRenderEmptyDocument(t *testing.T) {
 func TestRenderConfigFromConfig(t *testing.T) {
 	cfg := config.Default()
 	cfg.Theme.HeaderColor = "magenta"
+	cfg.Theme.CommentColor = "green"
+	cfg.Theme.HighlightColor = "red"
 	rcfg := RenderConfigFromConfig(cfg)
 
 	doc := &parser.Document{
@@ -150,10 +152,20 @@ func TestRenderConfigFromConfig(t *testing.T) {
 	got := Render(doc, rcfg)
 	want := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("magenta")).Render("[verse]"),
-		lipgloss.NewStyle().Foreground(lipgloss.Color("yellow")).Render("hi"),
+		lipgloss.NewStyle().Foreground(lipgloss.Color("green")).Render("hi"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Render() = %#v, want %#v", got, want)
+	}
+
+	// The chrome styles derive from the theme too.
+	wantBanner := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("magenta")).Render("CHORD")
+	if got := rcfg.BannerStyle.Render("CHORD"); got != wantBanner {
+		t.Errorf("BannerStyle.Render() = %q, want %q", got, wantBanner)
+	}
+	wantHighlight := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("red")).Render("> Library")
+	if got := rcfg.HighlightStyle.Render("> Library"); got != wantHighlight {
+		t.Errorf("HighlightStyle.Render() = %q, want %q", got, wantHighlight)
 	}
 }
 
