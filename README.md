@@ -34,9 +34,7 @@ chart-tty [flags] <chart file>
 ```
 
 On a terminal, `chart-tty` opens an interactive viewer. Running it with no arguments
-opens a centered main menu with a big block-letter **CHORD-TTY** title and the options
-**Library · Setlists · Open · Exit**. When stdout is piped, it prints the rendered chart as
-plain text instead.
+opens the TUI to the main menu where navigation options are displayed.
 
 ### Flags
 
@@ -132,26 +130,7 @@ And I'm [G]heading [D]homeward, [Em]homeward [C]bound
 {end_of_chorus}
 ```
 
-Supported directive families (all case-insensitive):
-
-- **Meta**: `title`/`t`, `subtitle`/`st` (maps to artist), `artist`, `composer`, `lyricist`,
-  `copyright`, `album`, `year`, `key`, `time`, `tempo`, `duration`, `capo`, `tag`, `meta`, `sorttitle`, `sortartist`
-- **Formatting**: `comment`/`c`, `comment_italic`/`ci`, `comment_box`/`cb`, `highlight`/`h`, `image`
-- **Environment**: `start_of_verse`/`sov`, `end_of_verse`/`eov`, `start_of_chorus`/`soc`,
-  `end_of_chorus`/`eoc`, `start_of_bridge`/`sob`, `end_of_bridge`/`eob`,
-  `start_of_tab`/`sot`, `end_of_tab`/`eot`, `start_of_grid`/`sog`, `end_of_grid`/`eog`, `chorus`
-
-Rules:
-
-- Blank lines inside an open environment never split the section; blank lines outside an
-  environment always do.
-- Non-chord bracket content must be escaped with a leading `*`: `[*N.C.]`, `[*----]`.
-- `{sot}` blocks are treated as tablature only when at least four lines lead with a musical
-  letter and a pipe (`E|------`); decorative `{sot}` blocks used purely for spacing are dropped.
-- Chords follow the ChordPro chord grammar: root `A`-`G` with optional `b`/`#`, optional
-  qualifier (`maj`, `min`, `mi`, `m`, `dim`, `aug`, `sus`, `add`, `h`), extension tokens
-  (`7`, `69`, `m7b5`, `7sus4`, `7b5`, `7#9`, `9`, `11`, `13`, `alt`, alterations, `^`/`+`),
-  and an optional slash bass (`C/G`, or a number for `G6/9`).
+View the full specification and all formatting rules at [chordpro.org](https://www.chordpro.org/chordpro/chordpro-directives/)
 
 ### Basic format
 
