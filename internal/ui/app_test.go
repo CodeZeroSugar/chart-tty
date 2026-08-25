@@ -191,6 +191,36 @@ func TestModelWideButShortStaysSingleColumn(t *testing.T) {
 	}
 }
 
+func TestPairSafeWindowBottomTrim(t *testing.T) {
+	// A page must never end on a chord whose lyric is just below it: the
+	// pair is pushed to the next page together.
+	lines := []string{"A", "B", "Cc", "Ly", "D", "E"}
+	keep := []bool{false, false, true, false, false, false} // Cc↔Ly pair
+	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 3})
+	m.keep = keep
+	view := m.View()
+	if strings.Contains(view, "Cc") {
+		t.Errorf("view %q must not end a page on the chord Cc (pair pushed to next page)", view)
+	}
+	if !strings.Contains(view, "A") || !strings.Contains(view, "B") {
+		t.Errorf("view %q missing page content A/B", view)
+	}
+}
+
+func TestPageDownKeepsPairTogether(t *testing.T) {
+	// Page down lands on the pair's lyric; the window must pull the chord in
+	// so the pair appears together at the top of the next page.
+	lines := []string{"A", "B", "Cc", "Ly", "D", "E"}
+	keep := []bool{false, false, true, false, false, false} // Cc↔Ly pair
+	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 3})
+	m.keep = keep
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	view := m.View()
+	if !strings.Contains(view, "Cc") || !strings.Contains(view, "Ly") {
+		t.Errorf("page-down view %q must show the chord/lyric pair together at the top", view)
+	}
+}
+
 func TestModelPageDownNoopWhenSongFitsOneScreen(t *testing.T) {
 	// 5 lines on a 3-row body: the whole song fits one two-column screen.
 	// Page down must not move — previously it collapsed to single-column and

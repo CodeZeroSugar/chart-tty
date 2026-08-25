@@ -33,30 +33,66 @@ func RenderConfigFromConfig(cfg config.Config) RenderConfig {
 }
 
 func Render(doc *parser.Document, cfg RenderConfig) []string {
-	var out []string
+	rows := renderRows(doc, cfg)
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = r.text
+	}
+	return out
+}
+
+// renderLines returns the rendered text lines plus a parallel keep slice:
+// keep[i] is true when a page break is forbidden between lines i and i+1
+// (the chord row of a chord/lyric pair and its lyric must never be split).
+func renderLines(doc *parser.Document, cfg RenderConfig) ([]string, []bool) {
+	rows := renderRows(doc, cfg)
+	lines := make([]string, len(rows))
+	keep := make([]bool, len(rows))
+	for i, r := range rows {
+		lines[i] = r.text
+		keep[i] = r.keepWithNext
+	}
+	return lines, keep
+}
+
+// renderedRow is one output line plus its keep-with-next flag.
+type renderedRow struct {
+	text         string
+	keepWithNext bool
+}
+
+func renderRows(doc *parser.Document, cfg RenderConfig) []renderedRow {
+	var out []renderedRow
+	appendRow := func(text string, keep bool) {
+		out = append(out, renderedRow{text: text, keepWithNext: keep})
+	}
 	if block := renderMetaBlock(doc, cfg); len(block) > 0 {
-		out = append(out, block...)
-		out = append(out, "")
+		for _, b := range block {
+			appendRow(b, false)
+		}
+		appendRow("", false)
 	}
 	for i, sec := range doc.Sections {
 		if i > 0 {
-			out = append(out, "")
+			appendRow("", false)
 		}
 		if sec.Name != "" {
-			out = append(out, applyStyle("["+sec.Name+"]", cfg.HeaderStyle))
+			appendRow(applyStyle("["+sec.Name+"]", cfg.HeaderStyle), false)
 		}
 		for _, line := range sec.Lines {
 			switch line.Type {
 			case parser.LineTypeChordAndLyric:
-				out = append(out, chordRow(line.Lyrics, line.Chords), line.Lyrics)
+				// The chord row and its lyric row are one unbreakable pair.
+				appendRow(chordRow(line.Lyrics, line.Chords), true)
+				appendRow(line.Lyrics, false)
 			case parser.LineTypeChord:
-				out = append(out, chordNames(line.Chords))
+				appendRow(chordNames(line.Chords), false)
 			case parser.LineTypeLyric:
-				out = append(out, line.Lyrics)
+				appendRow(line.Lyrics, false)
 			case parser.LineTypeTab:
-				out = append(out, line.Raw)
+				appendRow(line.Raw, false)
 			case parser.LineTypeComment:
-				out = append(out, applyStyle(line.Lyrics, cfg.CommentStyle))
+				appendRow(applyStyle(line.Lyrics, cfg.CommentStyle), false)
 			}
 		}
 	}

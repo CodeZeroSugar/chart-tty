@@ -45,6 +45,12 @@ func stripANSI(s string) string {
 	return sb.String()
 }
 
+// displayRow is one display row plus its keep-with-next flag.
+type displayRow struct {
+	text         string
+	keepWithNext bool
+}
+
 // expandRows soft-wraps rendered lines to colWidth, returning one string per
 // display row. Lines that fit pass through untouched so their styles stay
 // intact; only over-length lines are wrapped, stripped to plain text first
@@ -68,12 +74,39 @@ func expandRows(lines []string, colWidth int) []string {
 	return rows
 }
 
+// expandDisplayRows is expandRows with pair tracking: each row carries its
+// keepWithNext flag, and only the last wrapped chunk of a line inherits the
+// original keep flag (internal wrap points are breakable).
+func expandDisplayRows(lines []string, keep []bool, colWidth int) []displayRow {
+	if colWidth <= 0 {
+		colWidth = 1
+	}
+	rows := make([]displayRow, 0, len(lines))
+	for i, line := range lines {
+		kw := keep != nil && keep[i]
+		if displayWidth(line) <= colWidth {
+			rows = append(rows, displayRow{text: line, keepWithNext: kw})
+			continue
+		}
+		r := []rune(stripANSI(line))
+		for start := 0; start < len(r); start += colWidth {
+			end := min(start+colWidth, len(r))
+			rows = append(rows, displayRow{text: string(r[start:end]), keepWithNext: end == len(r) && kw})
+		}
+	}
+	return rows
+}
+
 // layoutColumns arranges lines into two side-by-side columns of the given
 // height separated by a styled divider. Lines flow top-to-bottom in the left
 // column, then continue in the right. Returns nil when the content fits in a
 // single column or the width cannot fit two columns — callers fall back to
 // single-column rendering.
-func layoutColumns(lines []string, width, height int, divider string) []string {
+//
+// A chord/lyric pair is never split: if a pair would straddle the divider it
+// is pushed entirely into the right column, and the bottom of the right
+// column never ends on a pair-start.
+func layoutColumns(lines []string, keep []bool, width, height int, divider string) []string {
 	if !shouldUseColumns(width) || height <= 0 {
 		return nil
 	}
@@ -82,10 +115,19 @@ func layoutColumns(lines []string, width, height int, divider string) []string {
 	}
 	colWidth := (width - columnGap) / 2
 
-	rows := expandRows(lines, colWidth)
+	rows := expandDisplayRows(lines, keep, colWidth)
 	// Only split when there is more content than one column can hold.
 	if len(rows) <= height {
 		return nil
+	}
+
+	split := height
+	if split < len(rows) && split > 0 && rows[split-1].keepWithNext {
+		split--
+	}
+	bottom := min(split+height, len(rows))
+	if bottom < len(rows) && bottom > 0 && rows[bottom-1].keepWithNext {
+		bottom--
 	}
 
 	pad := strings.Repeat(" ", colWidth)
@@ -94,11 +136,11 @@ func layoutColumns(lines []string, width, height int, divider string) []string {
 	for row := 0; row < height; row++ {
 		left := pad
 		right := pad
-		if row < len(rows) {
-			left = padRight(rows[row], colWidth)
+		if row < split {
+			left = padRight(rows[row].text, colWidth)
 		}
-		if height+row < len(rows) {
-			right = padRight(rows[height+row], colWidth)
+		if split+row < bottom {
+			right = padRight(rows[split+row].text, colWidth)
 		}
 		out = append(out, left+" "+divider+" "+right)
 	}

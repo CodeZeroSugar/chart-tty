@@ -256,6 +256,31 @@ func TestRenderMetaBlockSuppressesTitleAndKey(t *testing.T) {
 	}
 }
 
+func TestRenderKeepFlags(t *testing.T) {
+	doc := &parser.Document{
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{{
+			Name: "verse",
+			Lines: []parser.ParsedLine{
+				{Type: parser.LineTypeChordAndLyric, Raw: "Swing [D]low", Lyrics: "Swing low", Chords: []parser.ChordToken{{Name: "D", Position: 6}}},
+				{Type: parser.LineTypeChord, Raw: "[A] [F#m]", Chords: []parser.ChordToken{{Name: "A", Position: 0}, {Name: "F#m", Position: 2}}},
+				{Type: parser.LineTypeLyric, Raw: "Sweet chariot", Lyrics: "Sweet chariot"},
+				{Type: parser.LineTypeTab, Raw: "E|--0--|"},
+				{Type: parser.LineTypeComment, Raw: "{c: hi}", Lyrics: "hi"},
+			},
+		}},
+	}
+	lines, keep := renderLines(doc, RenderConfig{})
+	// Rows: [verse], chordRow, lyric, chordNames, lyric, tab, comment.
+	want := []bool{false, true, false, false, false, false, false}
+	if len(keep) != len(want) {
+		t.Fatalf("keep length = %d, want %d (lines=%#v)", len(keep), len(want), lines)
+	}
+	if !reflect.DeepEqual(keep, want) {
+		t.Errorf("keep = %#v, want %#v", keep, want)
+	}
+}
+
 func TestRenderConfigFromConfig(t *testing.T) {
 	cfg := config.Default()
 	cfg.Theme.HeaderColor = "magenta"

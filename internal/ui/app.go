@@ -42,6 +42,7 @@ const (
 
 type Model struct {
 	lines      []string
+	keep       []bool
 	doc        *parser.Document
 	transpose  int
 	offset     int
@@ -88,6 +89,7 @@ type setlistChartView struct {
 	title   string
 	content string
 	lines   []string
+	keep    []bool
 }
 
 type convertDoneMsg struct {
@@ -96,11 +98,13 @@ type convertDoneMsg struct {
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
-	return Model{lines: lines, cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode(), screen: screenViewChart}
+	return Model{lines: lines, keep: make([]bool, len(lines)), cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode(), screen: screenViewChart}
 }
 
 func NewDocModel(doc *parser.Document, cfg RenderConfig) Model {
-	m := NewModel(Render(doc, cfg), cfg)
+	lines, keep := renderLines(doc, cfg)
+	m := NewModel(lines, cfg)
+	m.keep = keep
 	m.doc = doc
 	m.title = doc.Title
 	return m
@@ -181,7 +185,7 @@ func (m Model) SetTranspose(n int) Model {
 	}
 	m.doc.Transpose(n)
 	m.transpose += n
-	m.lines = Render(m.doc, m.cfg)
+	m.lines, m.keep = renderLines(m.doc, m.cfg)
 	return m
 }
 
@@ -332,10 +336,11 @@ func (m Model) updateBrowseSetlistsKeys(k string) (tea.Model, tea.Cmd) {
 			for i, c := range charts {
 				doc, perr := parseStored(c.Content, m.chordMode)
 				if perr != nil {
-					views[i] = setlistChartView{title: c.Title, content: c.Content, lines: []string{"(unparsable chart)"}}
+					views[i] = setlistChartView{title: c.Title, content: c.Content, lines: []string{"(unparsable chart)"}, keep: []bool{false}}
 					continue
 				}
-				views[i] = setlistChartView{title: doc.Title, content: c.Content, lines: Render(doc, m.cfg)}
+				lines, keep := renderLines(doc, m.cfg)
+				views[i] = setlistChartView{title: doc.Title, content: c.Content, lines: lines, keep: keep}
 			}
 			m.setlist.name = sl.Name
 			m.setlist.charts = views
@@ -578,7 +583,7 @@ func (m Model) openStoredChart(id int64) (tea.Model, tea.Cmd) {
 	m.title = doc.Title
 	m.transpose = 0
 	m.offset = 0
-	m.lines = Render(doc, m.cfg)
+	m.lines, m.keep = renderLines(doc, m.cfg)
 	m.rawChart = stored.Content
 	m.message = ""
 	return m, nil
@@ -594,13 +599,13 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 		if m.doc != nil {
 			m.doc.Transpose(1)
 			m.transpose++
-			m.lines = Render(m.doc, m.cfg)
+			m.lines, m.keep = renderLines(m.doc, m.cfg)
 		}
 	case k == m.keys.TransposeDown:
 		if m.doc != nil {
 			m.doc.Transpose(-1)
 			m.transpose--
-			m.lines = Render(m.doc, m.cfg)
+			m.lines, m.keep = renderLines(m.doc, m.cfg)
 		}
 	case k == "L":
 		return m.openLibraryBrowser()
@@ -631,7 +636,7 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 				m.title = doc.Title
 				m.transpose = 0
 				m.offset = 0
-				m.lines = Render(doc, m.cfg)
+				m.lines, m.keep = renderLines(doc, m.cfg)
 			}
 		}
 		m.message = "chord mode: " + m.chordMode.String()
@@ -698,7 +703,7 @@ func (m Model) useColumns() bool {
 		return false
 	}
 	colWidth := (m.width - columnGap) / 2
-	rows := expandRows(m.lines, colWidth)
+	rows := expandDisplayRows(m.lines, m.keep, colWidth)
 	return len(rows) > m.bodyHeight()
 }
 
@@ -708,6 +713,30 @@ func (m Model) visibleRows() int {
 		rows *= 2
 	}
 	return rows
+}
+
+// pairSafeWindow returns the visible [top, bottom) window, adjusted so a
+// chord/lyric pair is never split by either boundary: a lyric that would open
+// a page without its chord pulls the chord in (both at the top), and a chord
+// that would end a page without its lyric is pushed to the next page (both go
+// down together).
+func pairSafeWindow(lines []string, keep []bool, offset, rows int) (int, int) {
+	top := offset
+	if top > 0 && len(keep) > top-1 && keep[top-1] {
+		top--
+	}
+	bottom := min(top+rows, len(lines))
+	if bottom < len(lines) && bottom > 0 && len(keep) > bottom-1 && keep[bottom-1] {
+		bottom--
+	}
+	if bottom < top {
+		bottom = top
+	}
+	return top, bottom
+}
+
+func (m Model) visibleWindow() (int, int) {
+	return pairSafeWindow(m.lines, m.keep, m.offset, m.visibleRows())
 }
 
 func (m Model) View() string {
@@ -739,19 +768,13 @@ func (m Model) View() string {
 	}
 
 	var body []string
+	top, bottom := m.visibleWindow()
 	if m.useColumns() {
 		divider := lipgloss.NewStyle().Faint(true).Render(dividerGlyph)
-		body = layoutColumns(m.body(), m.width, m.bodyHeight(), divider)
+		body = layoutColumns(m.lines[top:bottom], m.keep[top:bottom], m.width, m.bodyHeight(), divider)
 	}
-	if body == nil {
-		top := m.offset
-		bottom := m.offset + m.bodyHeight()
-		if bottom > len(m.lines) {
-			bottom = len(m.lines)
-		}
-		if top < len(m.lines) {
-			body = m.lines[top:bottom]
-		}
+	if body == nil && top < len(m.lines) {
+		body = m.lines[top:bottom]
 	}
 	for i, line := range body {
 		if i > 0 {
@@ -974,9 +997,9 @@ func (m Model) viewSetlist() string {
 
 	if m.setlist.index < len(m.setlist.charts) {
 		lines := m.setlist.charts[m.setlist.index].lines
+		keep := m.setlist.charts[m.setlist.index].keep
 		rows := max(m.bodyHeight()-1, 1) // header is always printed
-		top := min(m.offset, max(len(lines)-1, 0))
-		bottom := min(top+rows, len(lines))
+		top, bottom := pairSafeWindow(lines, keep, m.offset, rows)
 		for i := top; i < bottom; i++ {
 			sb.WriteString(lines[i])
 			sb.WriteString("\n")
@@ -1094,7 +1117,7 @@ func (m Model) openDiskFile(path string) (tea.Model, tea.Cmd) {
 	m.title = doc.Title
 	m.transpose = 0
 	m.offset = 0
-	m.lines = Render(doc, m.cfg)
+	m.lines, m.keep = renderLines(doc, m.cfg)
 	m.message = ""
 	m.rawChart = string(content)
 	return m, nil
@@ -1285,16 +1308,6 @@ func (m Model) updateMainMenuKeys(k string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// body returns the rendered lines visible at the current offset. In
-// single-column mode it is the offset window; in two-column mode it is the
-// remaining stream from the offset, which layoutColumns chunks.
-func (m Model) body() []string {
-	if m.offset >= len(m.lines) {
-		return nil
-	}
-	return m.lines[m.offset:]
-}
-
 func (m Model) currentKey() string {
 	if m.doc == nil {
 		return ""
@@ -1346,7 +1359,7 @@ func (m Model) applyConversion(res aichart.Result, cerr error) Model {
 	m.doc = nd
 	m.title = nd.Title
 	m.transpose = 0
-	m.lines = Render(nd, m.cfg)
+	m.lines, m.keep = renderLines(nd, m.cfg)
 	m.offset = 0
 	m.lastConverted = res.Chart
 	m.message = "converted · s: save to library"

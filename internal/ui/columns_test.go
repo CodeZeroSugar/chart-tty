@@ -78,7 +78,7 @@ func TestExpandRows(t *testing.T) {
 
 func TestLayoutColumnsFlowOrder(t *testing.T) {
 	lines := []string{"a", "b", "c", "d", "e", "f"}
-	got := layoutColumns(lines, 83, 3, dividerGlyph)
+	got := layoutColumns(lines, nil, 83, 3, dividerGlyph)
 
 	if len(got) != 3 {
 		t.Fatalf("rows = %d, want 3", len(got))
@@ -98,7 +98,7 @@ func TestLayoutColumnsFlowOrder(t *testing.T) {
 
 func TestLayoutColumnsDividerOnEveryRow(t *testing.T) {
 	lines := []string{"l1", "l2", "l3", "l4", "r1", "r2"}
-	got := layoutColumns(lines, 83, 4, dividerGlyph)
+	got := layoutColumns(lines, nil, 83, 4, dividerGlyph)
 	if len(got) != 4 {
 		t.Fatalf("rows = %d, want 4", len(got))
 	}
@@ -127,7 +127,7 @@ func TestLayoutColumnsDividerOnEveryRow(t *testing.T) {
 }
 
 func TestLayoutColumnsPadsToEqualWidth(t *testing.T) {
-	got := layoutColumns([]string{"x", "y"}, 83, 2, dividerGlyph)
+	got := layoutColumns([]string{"x", "y"}, nil, 83, 2, dividerGlyph)
 	for i, row := range got {
 		if len([]rune(row)) != 83 {
 			t.Errorf("row %d width = %d, want 83", i, len([]rune(row)))
@@ -145,7 +145,7 @@ func TestLayoutColumnsPadsToEqualWidth(t *testing.T) {
 func TestLayoutColumnsWrapsLongLines(t *testing.T) {
 	tab := "E|---3-3-4-4|---8-8-6-6|-------3-3-4-4"
 	lines := append([]string{tab}, []string{"a", "b", "c", "d"}...)
-	got := layoutColumns(lines, 83, 3, dividerGlyph)
+	got := layoutColumns(lines, nil, 83, 3, dividerGlyph)
 	joined := strings.Join(got, "\n")
 	if !strings.Contains(joined, "E|---3-3-4") || !strings.Contains(joined, "-4|---8-8-") {
 		t.Errorf("wrapped tab content lost:\n%s", joined)
@@ -155,7 +155,7 @@ func TestLayoutColumnsWrapsLongLines(t *testing.T) {
 func TestLayoutColumnsStyledLinesKeepDividerAligned(t *testing.T) {
 	styled := "\x1b[36;1m[chorus]\x1b[0m" // 7 printable cells, 17 runes
 	lines := []string{"plain lyric line here", styled, "another plain line", "more content", "even more", "last line"}
-	got := layoutColumns(lines, 83, 3, dividerGlyph)
+	got := layoutColumns(lines, nil, 83, 3, dividerGlyph)
 
 	first := -1
 	for i, row := range got {
@@ -181,13 +181,43 @@ func TestLayoutColumnsStyledLinesKeepDividerAligned(t *testing.T) {
 
 func TestLayoutColumnsShortContentStaysSingle(t *testing.T) {
 	lines := []string{"a", "b", "c"}
-	if got := layoutColumns(lines, 83, 3, dividerGlyph); got != nil {
+	if got := layoutColumns(lines, nil, 83, 3, dividerGlyph); got != nil {
 		t.Errorf("content fitting one column must not split, got %#v", got)
 	}
 }
 
 func TestLayoutColumnsNarrowFallback(t *testing.T) {
-	if got := layoutColumns([]string{"a"}, 40, 10, dividerGlyph); got != nil {
+	if got := layoutColumns([]string{"a"}, nil, 40, 10, dividerGlyph); got != nil {
 		t.Errorf("layoutColumns(40) = %#v, want nil fallback", got)
+	}
+}
+
+func TestLayoutColumnsDoesNotSplitPairAtDivider(t *testing.T) {
+	lines := []string{"a", "b", "cc", "ly", "d", "e"}
+	keep := []bool{false, false, true, false, false, false} // cc↔ly pair
+	got := layoutColumns(lines, keep, 83, 3, dividerGlyph)
+	if len(got) != 3 {
+		t.Fatalf("rows = %d, want 3", len(got))
+	}
+	// The pair (cc, ly) must both land in the right column, not straddle the
+	// divider: cc is the first right-column row, ly the second.
+	parts0 := strings.SplitN(got[0], " ║ ", 2)
+	parts1 := strings.SplitN(got[1], " ║ ", 2)
+	if !strings.Contains(parts0[1], "cc") {
+		t.Errorf("row0 right = %q, want chord cc pushed into the right column", parts0[1])
+	}
+	if !strings.Contains(parts1[1], "ly") {
+		t.Errorf("row1 right = %q, want lyric ly directly under its chord in the right column", parts1[1])
+	}
+}
+
+func TestLayoutColumnsDoesNotEndPageOnPairStart(t *testing.T) {
+	lines := []string{"a", "b", "c", "d", "e", "f", "g"}
+	keep := []bool{false, false, false, false, false, true, false} // f↔g pair
+	got := layoutColumns(lines, keep, 83, 3, dividerGlyph)
+	for _, row := range got {
+		if strings.Contains(row, "f") {
+			t.Errorf("row %q ends a page on dangling chord f; pair must move to the next page", row)
+		}
 	}
 }
