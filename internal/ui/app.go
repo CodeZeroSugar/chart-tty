@@ -1314,7 +1314,16 @@ func (m Model) viewMainMenu() string {
 	}
 	sb.WriteString("\n")
 
-	optPad := max((width-10)/2, 0) // center around the widest option
+	// Center the option text (ignoring the "> "/"  " cursor prefix, which
+	// extends left) so the words line up with the title; options stay
+	// left-aligned with each other.
+	optWidth := 0
+	for _, opt := range menuOptions {
+		if w := len(opt); w > optWidth {
+			optWidth = w
+		}
+	}
+	optPad := max((width-optWidth)/2-2, 0)
 	for i, opt := range menuOptions {
 		row := opt
 		if i == m.menuIndex {
