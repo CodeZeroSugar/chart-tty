@@ -103,9 +103,10 @@ func expandDisplayRows(lines []string, keep []bool, colWidth int) []displayRow {
 // single column or the width cannot fit two columns — callers fall back to
 // single-column rendering.
 //
-// A chord/lyric pair is never split: if a pair would straddle the divider it
-// is pushed entirely into the right column, and the bottom of the right
-// column never ends on a pair-start.
+// A chord/lyric pair or tab block (an unbreakable run) is never split: if a
+// run would straddle the divider it is pushed entirely into the right column,
+// and the bottom of the right column never ends inside a run that fits. A run
+// taller than one column cannot be kept whole, so a break is allowed there.
 func layoutColumns(lines []string, keep []bool, width, height int, divider string) []string {
 	if !shouldUseColumns(width) || height <= 0 {
 		return nil
@@ -123,11 +124,17 @@ func layoutColumns(lines []string, keep []bool, width, height int, divider strin
 
 	split := height
 	if split < len(rows) && split > 0 && rows[split-1].keepWithNext {
-		split--
+		if s, e := displayRunBounds(rows, split-1); e-s+1 <= height {
+			split = s
+		}
 	}
 	bottom := min(split+height, len(rows))
-	if bottom < len(rows) && bottom > 0 && rows[bottom-1].keepWithNext {
-		bottom--
+	for bottom > split && bottom < len(rows) && bottom > 0 && rows[bottom-1].keepWithNext {
+		if s, e := displayRunBounds(rows, bottom-1); e-s+1 > height {
+			break
+		} else {
+			bottom = s
+		}
 	}
 
 	pad := strings.Repeat(" ", colWidth)
@@ -145,6 +152,20 @@ func layoutColumns(lines []string, keep []bool, width, height int, divider strin
 		out = append(out, left+" "+divider+" "+right)
 	}
 	return out
+}
+
+// displayRunBounds returns the inclusive start/end indices of the maximal
+// unbreakable run of display rows containing index i.
+func displayRunBounds(rows []displayRow, i int) (int, int) {
+	start := i
+	for start > 0 && rows[start-1].keepWithNext {
+		start--
+	}
+	end := i
+	for end+1 < len(rows) && rows[end].keepWithNext {
+		end++
+	}
+	return start, end
 }
 
 // padRight pads s with spaces so its display width reaches width. Styled

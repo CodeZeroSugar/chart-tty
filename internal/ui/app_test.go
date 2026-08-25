@@ -221,6 +221,40 @@ func TestPageDownKeepsPairTogether(t *testing.T) {
 	}
 }
 
+func TestTabBlockNotSplitAtPageBreak(t *testing.T) {
+	// A tab block (T0-T2) that fits one page must never be cut at the bottom;
+	// page down lands it whole at the top.
+	lines := []string{"A", "B", "T0", "T1", "T2", "X"}
+	keep := []bool{false, false, true, true, false, false} // T0..T2 chained
+	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 3})
+	m.keep = keep
+
+	view := m.View()
+	if strings.Contains(view, "T0") {
+		t.Errorf("view %q must not end a page inside the tab block (block moves to next page)", view)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	view = m.View()
+	if !strings.Contains(view, "T0") || !strings.Contains(view, "T1") || !strings.Contains(view, "T2") {
+		t.Errorf("page-down view %q must show the whole tab block together at the top", view)
+	}
+}
+
+func TestTabBlockTallerThanPageStillRenders(t *testing.T) {
+	// A tab block taller than the page cannot be kept whole; it must break
+	// rather than collapse the window to nothing.
+	lines := []string{"A", "T0", "T1", "T2", "T3", "T4", "X"}
+	keep := []bool{false, true, true, true, true, true, false} // T0..T4 chained (5 rows)
+	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 3})
+	m.keep = keep
+
+	view := m.View()
+	if !strings.Contains(view, "T0") {
+		t.Errorf("view %q must still render the over-tall tab block (break allowed)", view)
+	}
+}
+
 func TestModelPageDownNoopWhenSongFitsOneScreen(t *testing.T) {
 	// 5 lines on a 3-row body: the whole song fits one two-column screen.
 	// Page down must not move — previously it collapsed to single-column and

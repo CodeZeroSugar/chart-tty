@@ -79,7 +79,7 @@ func renderRows(doc *parser.Document, cfg RenderConfig) []renderedRow {
 		if sec.Name != "" {
 			appendRow(applyStyle("["+sec.Name+"]", cfg.HeaderStyle), false)
 		}
-		for _, line := range sec.Lines {
+		for li, line := range sec.Lines {
 			switch line.Type {
 			case parser.LineTypeChordAndLyric:
 				// The chord row and its lyric row are one unbreakable pair.
@@ -90,7 +90,10 @@ func renderRows(doc *parser.Document, cfg RenderConfig) []renderedRow {
 			case parser.LineTypeLyric:
 				appendRow(line.Lyrics, false)
 			case parser.LineTypeTab:
-				appendRow(line.Raw, false)
+				// A tab block is one unbreakable unit: chain every tab row to
+				// the next tab row, leaving only the last row breakable.
+				keep := li+1 < len(sec.Lines) && sec.Lines[li+1].Type == parser.LineTypeTab
+				appendRow(line.Raw, keep)
 			case parser.LineTypeComment:
 				appendRow(applyStyle(line.Lyrics, cfg.CommentStyle), false)
 			}

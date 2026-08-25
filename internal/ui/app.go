@@ -715,24 +715,45 @@ func (m Model) visibleRows() int {
 	return rows
 }
 
-// pairSafeWindow returns the visible [top, bottom) window, adjusted so a
-// chord/lyric pair is never split by either boundary: a lyric that would open
-// a page without its chord pulls the chord in (both at the top), and a chord
-// that would end a page without its lyric is pushed to the next page (both go
-// down together).
+// pairSafeWindow returns the visible [top, bottom) window, adjusted so an
+// unbreakable run (a chord/lyric pair or a tab block) is never split by
+// either boundary: a lyric or mid-block row that would open a page pulls the
+// window back to the run's first line, and a page never ends inside a run
+// that fits. A run taller than the visible rows cannot be kept whole, so a
+// break is allowed there rather than collapsing the window to nothing.
 func pairSafeWindow(lines []string, keep []bool, offset, rows int) (int, int) {
 	top := offset
-	if top > 0 && len(keep) > top-1 && keep[top-1] {
+	// Pull the top back to the start of the run the offset landed inside.
+	for top > 0 && len(keep) > top-1 && keep[top-1] {
 		top--
 	}
 	bottom := min(top+rows, len(lines))
-	if bottom < len(lines) && bottom > 0 && len(keep) > bottom-1 && keep[bottom-1] {
-		bottom--
+	// End the page before any run it would cut, unless the run is too tall.
+	for bottom > top && bottom < len(lines) && bottom > 0 && len(keep) > bottom-1 && keep[bottom-1] {
+		s, e := runBounds(keep, bottom-1)
+		if e-s+1 > rows {
+			break
+		}
+		bottom = s
 	}
 	if bottom < top {
 		bottom = top
 	}
 	return top, bottom
+}
+
+// runBounds returns the inclusive start/end indices of the maximal unbreakable
+// run (contiguous keep=true boundaries) containing index i.
+func runBounds(keep []bool, i int) (int, int) {
+	start := i
+	for start > 0 && keep[start-1] {
+		start--
+	}
+	end := i
+	for end+1 < len(keep) && keep[end] {
+		end++
+	}
+	return start, end
 }
 
 func (m Model) visibleWindow() (int, int) {

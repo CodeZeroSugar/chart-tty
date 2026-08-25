@@ -281,6 +281,28 @@ func TestRenderKeepFlags(t *testing.T) {
 	}
 }
 
+func TestRenderTabBlockChaining(t *testing.T) {
+	doc := &parser.Document{
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{{
+			Name: "tab",
+			Lines: []parser.ParsedLine{
+				{Type: parser.LineTypeTab, Raw: "E|--0--|"},
+				{Type: parser.LineTypeTab, Raw: "B|--1--|"},
+				{Type: parser.LineTypeTab, Raw: "G|--2--|"},
+				{Type: parser.LineTypeLyric, Raw: "song", Lyrics: "song"},
+			},
+		}},
+	}
+	_, keep := renderLines(doc, RenderConfig{})
+	// Rows: [tab], E|, B|, G|, song. The three tab rows chain together; the
+	// last tab row and the following lyric stay breakable.
+	want := []bool{false, true, true, false, false}
+	if !reflect.DeepEqual(keep, want) {
+		t.Errorf("keep = %#v, want %#v", keep, want)
+	}
+}
+
 func TestRenderConfigFromConfig(t *testing.T) {
 	cfg := config.Default()
 	cfg.Theme.HeaderColor = "magenta"

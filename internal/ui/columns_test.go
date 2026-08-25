@@ -221,3 +221,40 @@ func TestLayoutColumnsDoesNotEndPageOnPairStart(t *testing.T) {
 		}
 	}
 }
+
+func TestLayoutColumnsDoesNotSplitTabBlockAtDivider(t *testing.T) {
+	// A tab block (T0-T2) that fits one column must not straddle the divider:
+	// the whole block lands in the right column.
+	lines := []string{"a", "b", "T0", "T1", "T2", "d"}
+	keep := []bool{false, false, true, true, false, false} // T0..T2 chained
+	got := layoutColumns(lines, keep, 83, 3, dividerGlyph)
+	if len(got) != 3 {
+		t.Fatalf("rows = %d, want 3", len(got))
+	}
+	parts0 := strings.SplitN(got[0], " ║ ", 2)
+	parts1 := strings.SplitN(got[1], " ║ ", 2)
+	parts2 := strings.SplitN(got[2], " ║ ", 2)
+	if !strings.Contains(parts0[1], "T0") || !strings.Contains(parts1[1], "T1") || !strings.Contains(parts2[1], "T2") {
+		t.Errorf("tab block not kept together in right column: %q / %q / %q", parts0[1], parts1[1], parts2[1])
+	}
+}
+
+func TestLayoutColumnsTabBlockTallerThanColumnStillRenders(t *testing.T) {
+	// A tab block taller than one column cannot be kept whole; the divider
+	// split must be allowed rather than dropping the content.
+	lines := []string{"a", "T0", "T1", "T2", "T3", "T4", "d"}
+	keep := []bool{false, true, true, true, true, true, false} // T0..T4 chained (5 rows)
+	got := layoutColumns(lines, keep, 83, 3, dividerGlyph)
+	if len(got) != 3 {
+		t.Fatalf("rows = %d, want 3", len(got))
+	}
+	found := false
+	for _, row := range got {
+		if strings.Contains(row, "T0") || strings.Contains(row, "T1") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("over-tall tab block dropped entirely: %#v", got)
+	}
+}
