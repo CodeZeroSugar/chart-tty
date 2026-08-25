@@ -270,15 +270,20 @@ func TestRenderKeepFlags(t *testing.T) {
 			},
 		}},
 	}
-	lines, keep := renderLines(doc, RenderConfig{})
+	lines, keep, keepTab, keepPage := renderLines(doc, RenderConfig{})
 	// Rows: [verse], chordRow, lyric, chordNames, lyric, tab, comment.
-	want := []bool{false, true, false, false, false, false, false}
-	if len(keep) != len(want) {
-		t.Fatalf("keep length = %d, want %d (lines=%#v)", len(keep), len(want), lines)
+	wantKeep := []bool{true, true, false, false, false, false, false}
+	wantKeepPage := []bool{true, true, true, true, true, true, false}
+	if !reflect.DeepEqual(keep, wantKeep) {
+		t.Errorf("keep = %#v, want %#v", keep, wantKeep)
 	}
-	if !reflect.DeepEqual(keep, want) {
-		t.Errorf("keep = %#v, want %#v", keep, want)
+	if !reflect.DeepEqual(keepTab, make([]bool, len(keep))) {
+		t.Errorf("keepTab = %#v, want all false", keepTab)
 	}
+	if !reflect.DeepEqual(keepPage, wantKeepPage) {
+		t.Errorf("keepPage = %#v, want %#v", keepPage, wantKeepPage)
+	}
+	_ = lines
 }
 
 func TestRenderTabBlockChaining(t *testing.T) {
@@ -294,12 +299,20 @@ func TestRenderTabBlockChaining(t *testing.T) {
 			},
 		}},
 	}
-	_, keep := renderLines(doc, RenderConfig{})
-	// Rows: [tab], E|, B|, G|, song. The three tab rows chain together; the
-	// last tab row and the following lyric stay breakable.
-	want := []bool{false, true, true, false, false}
-	if !reflect.DeepEqual(keep, want) {
-		t.Errorf("keep = %#v, want %#v", keep, want)
+	_, keep, keepTab, keepPage := renderLines(doc, RenderConfig{})
+	// Rows: [tab], E|, B|, G|, song. The three tab rows chain together in
+	// keepTab; keepPage chains the whole named section.
+	wantKeep := []bool{true, false, false, false, false}
+	wantKeepTab := []bool{false, true, true, false, false}
+	wantKeepPage := []bool{true, true, true, true, false}
+	if !reflect.DeepEqual(keep, wantKeep) {
+		t.Errorf("keep = %#v, want %#v", keep, wantKeep)
+	}
+	if !reflect.DeepEqual(keepTab, wantKeepTab) {
+		t.Errorf("keepTab = %#v, want %#v", keepTab, wantKeepTab)
+	}
+	if !reflect.DeepEqual(keepPage, wantKeepPage) {
+		t.Errorf("keepPage = %#v, want %#v", keepPage, wantKeepPage)
 	}
 }
 

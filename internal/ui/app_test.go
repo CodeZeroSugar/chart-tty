@@ -225,9 +225,9 @@ func TestTabBlockNotSplitAtPageBreak(t *testing.T) {
 	// A tab block (T0-T2) that fits one page must never be cut at the bottom;
 	// page down lands it whole at the top.
 	lines := []string{"A", "B", "T0", "T1", "T2", "X"}
-	keep := []bool{false, false, true, true, false, false} // T0..T2 chained
+	keepTab := []bool{false, false, true, true, false, false} // T0..T2 chained
 	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 3})
-	m.keep = keep
+	m.keepTab = keepTab
 
 	view := m.View()
 	if strings.Contains(view, "T0") {
@@ -245,13 +245,93 @@ func TestTabBlockTallerThanPageStillRenders(t *testing.T) {
 	// A tab block taller than the page cannot be kept whole; it must break
 	// rather than collapse the window to nothing.
 	lines := []string{"A", "T0", "T1", "T2", "T3", "T4", "X"}
-	keep := []bool{false, true, true, true, true, true, false} // T0..T4 chained (5 rows)
+	keepTab := []bool{false, true, true, true, true, true, false} // T0..T4 chained (5 rows)
 	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 3})
-	m.keep = keep
+	m.keepTab = keepTab
 
 	view := m.View()
 	if !strings.Contains(view, "T0") {
 		t.Errorf("view %q must still render the over-tall tab block (break allowed)", view)
+	}
+}
+
+func TestSectionNotSplitAtPageBreak(t *testing.T) {
+	// A fitting section must never straddle a page break: page 1 packs whole
+	// sections 1+2 and ends at the section-2 boundary; page-down lands the
+	// whole section 3 at the top.
+	lines := []string{"[S1]", "L1", "[S2]", "L2", "[S3]", "L3"}
+	keep := []bool{true, false, true, false, true, false}     // header→first row
+	keepPage := []bool{true, false, true, false, true, false} // whole sections
+	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 4})
+	m.keep = keep
+	m.keepPage = keepPage
+
+	view := m.View()
+	for _, want := range []string{"[S1]", "L1", "[S2]", "L2"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view %q missing %q (sections pack per page)", view, want)
+		}
+	}
+	if strings.Contains(view, "[S3]") {
+		t.Errorf("view %q must end at the section-2 boundary, not straddle section 3", view)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	view = m.View()
+	if !strings.Contains(view, "[S3]") || !strings.Contains(view, "L3") {
+		t.Errorf("page-down view %q must show section 3 whole at the top", view)
+	}
+}
+
+func TestSectionPackingAndPageAlign(t *testing.T) {
+	// Multiple complete sections pack on one page; the page ends at a section
+	// boundary (blank tail allowed).
+	lines := []string{"[S1]", "L1", "[S2]", "L2", "[S3]", "L3"}
+	keep := []bool{true, false, true, false, true, false}
+	keepPage := []bool{true, false, true, false, true, false}
+	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 5})
+	m.keep = keep
+	m.keepPage = keepPage
+
+	view := m.View()
+	for _, want := range []string{"[S1]", "L1", "[S2]", "L2"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view %q missing %q (sections should pack per page)", view, want)
+		}
+	}
+	if strings.Contains(view, "[S3]") {
+		t.Errorf("view %q must end at the section 2 boundary (not straddle section 3)", view)
+	}
+}
+
+func TestOverTallSectionScrollableAndHeaderNotOrphaned(t *testing.T) {
+	// An over-tall section stays scrollable (fit-aware top pull), and the
+	// section header is never left as the last row of a page.
+	lines := []string{"A", "B", "[S]", "L1", "L2", "L3", "L4"}
+	keep := []bool{false, false, true, false, false, false, false}  // header→L1
+	keepPage := []bool{false, false, true, true, true, true, false} // whole section
+	m := update(t, NewModel(lines, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 40, Height: 3})
+	m.keep = keep
+	m.keepPage = keepPage
+
+	// First page: the header is not stranded as the last row; it moves to the
+	// next page with its content.
+	view := m.View()
+	if strings.Contains(view, "[S]") {
+		t.Errorf("view %q must not end a page on the section header (header keeps with its row)", view)
+	}
+
+	// Page down lands at the header; the over-tall section is scrollable.
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	view = m.View()
+	if !strings.Contains(view, "[S]") || !strings.Contains(view, "L1") {
+		t.Errorf("page-down view %q must show the header with its first row at the top", view)
+	}
+
+	// Further page down scrolls deeper into the over-tall section (no snap-back).
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	if strings.Contains(m.View(), "[S]") {
+		t.Errorf("scrolled view %q snapped back to the section start; over-tall sections must stay scrollable", m.View())
 	}
 }
 

@@ -41,61 +41,75 @@ func Render(doc *parser.Document, cfg RenderConfig) []string {
 	return out
 }
 
-// renderLines returns the rendered text lines plus a parallel keep slice:
-// keep[i] is true when a page break is forbidden between lines i and i+1
-// (the chord row of a chord/lyric pair and its lyric must never be split).
-func renderLines(doc *parser.Document, cfg RenderConfig) ([]string, []bool) {
+// renderLines returns the rendered text lines plus three parallel keep slices:
+//   - keep: chord/lyric pairs and the section header + its first row — small
+//     units that never break, on pages or across the divider.
+//   - keepTab: tab→tab chains — unbreakable when they fit.
+//   - keepPage: whole named sections — unbreakable across page breaks when
+//     they fit (page-level; the divider lets sections straddle).
+func renderLines(doc *parser.Document, cfg RenderConfig) ([]string, []bool, []bool, []bool) {
 	rows := renderRows(doc, cfg)
 	lines := make([]string, len(rows))
 	keep := make([]bool, len(rows))
+	keepTab := make([]bool, len(rows))
+	keepPage := make([]bool, len(rows))
 	for i, r := range rows {
 		lines[i] = r.text
-		keep[i] = r.keepWithNext
+		keep[i] = r.keepNext
+		keepTab[i] = r.keepTab
+		keepPage[i] = r.keepPage
 	}
-	return lines, keep
+	return lines, keep, keepTab, keepPage
 }
 
-// renderedRow is one output line plus its keep-with-next flag.
+// renderedRow is one output line plus its keep flags.
 type renderedRow struct {
-	text         string
-	keepWithNext bool
+	text     string
+	keepNext bool // pairs + header→first row (always kept)
+	keepTab  bool // tab→tab chains (kept when they fit)
+	keepPage bool // whole named sections (kept across pages when they fit)
 }
 
 func renderRows(doc *parser.Document, cfg RenderConfig) []renderedRow {
 	var out []renderedRow
-	appendRow := func(text string, keep bool) {
-		out = append(out, renderedRow{text: text, keepWithNext: keep})
+	appendRow := func(text string, keepNext, keepTab, keepPage bool) {
+		out = append(out, renderedRow{text: text, keepNext: keepNext, keepTab: keepTab, keepPage: keepPage})
 	}
 	if block := renderMetaBlock(doc, cfg); len(block) > 0 {
 		for _, b := range block {
-			appendRow(b, false)
+			appendRow(b, false, false, false)
 		}
-		appendRow("", false)
+		appendRow("", false, false, false)
 	}
 	for i, sec := range doc.Sections {
 		if i > 0 {
-			appendRow("", false)
+			appendRow("", false, false, false)
 		}
-		if sec.Name != "" {
-			appendRow(applyStyle("["+sec.Name+"]", cfg.HeaderStyle), false)
+		named := sec.Name != ""
+		if named {
+			// The header stays with its first content row (a chord/lyric pair
+			// when the section starts with one).
+			appendRow(applyStyle("["+sec.Name+"]", cfg.HeaderStyle), len(sec.Lines) > 0, false, len(sec.Lines) > 0)
 		}
 		for li, line := range sec.Lines {
+			last := li == len(sec.Lines)-1
+			pageKeep := named && !last
 			switch line.Type {
 			case parser.LineTypeChordAndLyric:
 				// The chord row and its lyric row are one unbreakable pair.
-				appendRow(chordRow(line.Lyrics, line.Chords), true)
-				appendRow(line.Lyrics, false)
+				appendRow(chordRow(line.Lyrics, line.Chords), true, false, named)
+				appendRow(line.Lyrics, false, false, pageKeep)
 			case parser.LineTypeChord:
-				appendRow(chordNames(line.Chords), false)
+				appendRow(chordNames(line.Chords), false, false, pageKeep)
 			case parser.LineTypeLyric:
-				appendRow(line.Lyrics, false)
+				appendRow(line.Lyrics, false, false, pageKeep)
 			case parser.LineTypeTab:
 				// A tab block is one unbreakable unit: chain every tab row to
 				// the next tab row, leaving only the last row breakable.
-				keep := li+1 < len(sec.Lines) && sec.Lines[li+1].Type == parser.LineTypeTab
-				appendRow(line.Raw, keep)
+				keepTab := li+1 < len(sec.Lines) && sec.Lines[li+1].Type == parser.LineTypeTab
+				appendRow(line.Raw, false, keepTab, pageKeep)
 			case parser.LineTypeComment:
-				appendRow(applyStyle(line.Lyrics, cfg.CommentStyle), false)
+				appendRow(applyStyle(line.Lyrics, cfg.CommentStyle), false, false, pageKeep)
 			}
 		}
 	}

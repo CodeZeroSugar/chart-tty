@@ -76,14 +76,15 @@ func expandRows(lines []string, colWidth int) []string {
 
 // expandDisplayRows is expandRows with pair tracking: each row carries its
 // keepWithNext flag, and only the last wrapped chunk of a line inherits the
-// original keep flag (internal wrap points are breakable).
-func expandDisplayRows(lines []string, keep []bool, colWidth int) []displayRow {
+// original keep flag (internal wrap points are breakable). keep covers chord/
+// lyric pairs and header→first-row units; keepTab covers tab blocks.
+func expandDisplayRows(lines []string, keep, keepTab []bool, colWidth int) []displayRow {
 	if colWidth <= 0 {
 		colWidth = 1
 	}
 	rows := make([]displayRow, 0, len(lines))
 	for i, line := range lines {
-		kw := keep != nil && keep[i]
+		kw := (keep != nil && keep[i]) || (keepTab != nil && keepTab[i])
 		if displayWidth(line) <= colWidth {
 			rows = append(rows, displayRow{text: line, keepWithNext: kw})
 			continue
@@ -103,11 +104,13 @@ func expandDisplayRows(lines []string, keep []bool, colWidth int) []displayRow {
 // single column or the width cannot fit two columns — callers fall back to
 // single-column rendering.
 //
-// A chord/lyric pair or tab block (an unbreakable run) is never split: if a
-// run would straddle the divider it is pushed entirely into the right column,
-// and the bottom of the right column never ends inside a run that fits. A run
-// taller than one column cannot be kept whole, so a break is allowed there.
-func layoutColumns(lines []string, keep []bool, width, height int, divider string) []string {
+// A chord/lyric pair, tab block, or section header with its first row (an
+// unbreakable run) is never split: if a run would straddle the divider it is
+// pushed entirely into the right column, and the bottom of the right column
+// never ends inside a run that fits. A run taller than one column cannot be
+// kept whole, so a break is allowed there. Whole sections may straddle the
+// divider beyond their header+first-row.
+func layoutColumns(lines []string, keep, keepTab []bool, width, height int, divider string) []string {
 	if !shouldUseColumns(width) || height <= 0 {
 		return nil
 	}
@@ -116,7 +119,7 @@ func layoutColumns(lines []string, keep []bool, width, height int, divider strin
 	}
 	colWidth := (width - columnGap) / 2
 
-	rows := expandDisplayRows(lines, keep, colWidth)
+	rows := expandDisplayRows(lines, keep, keepTab, colWidth)
 	// Only split when there is more content than one column can hold.
 	if len(rows) <= height {
 		return nil

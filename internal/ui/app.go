@@ -43,6 +43,8 @@ const (
 type Model struct {
 	lines      []string
 	keep       []bool
+	keepTab    []bool
+	keepPage   []bool
 	doc        *parser.Document
 	transpose  int
 	offset     int
@@ -86,10 +88,12 @@ type Model struct {
 
 // setlistChartView is one chart inside an open setlist, pre-rendered.
 type setlistChartView struct {
-	title   string
-	content string
-	lines   []string
-	keep    []bool
+	title    string
+	content  string
+	lines    []string
+	keep     []bool
+	keepTab  []bool
+	keepPage []bool
 }
 
 type convertDoneMsg struct {
@@ -98,13 +102,15 @@ type convertDoneMsg struct {
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
-	return Model{lines: lines, keep: make([]bool, len(lines)), cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode(), screen: screenViewChart}
+	return Model{lines: lines, keep: make([]bool, len(lines)), keepTab: make([]bool, len(lines)), keepPage: make([]bool, len(lines)), cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode(), screen: screenViewChart}
 }
 
 func NewDocModel(doc *parser.Document, cfg RenderConfig) Model {
-	lines, keep := renderLines(doc, cfg)
+	lines, keep, keepTab, keepPage := renderLines(doc, cfg)
 	m := NewModel(lines, cfg)
 	m.keep = keep
+	m.keepTab = keepTab
+	m.keepPage = keepPage
 	m.doc = doc
 	m.title = doc.Title
 	return m
@@ -185,7 +191,7 @@ func (m Model) SetTranspose(n int) Model {
 	}
 	m.doc.Transpose(n)
 	m.transpose += n
-	m.lines, m.keep = renderLines(m.doc, m.cfg)
+	m.lines, m.keep, m.keepTab, m.keepPage = renderLines(m.doc, m.cfg)
 	return m
 }
 
@@ -336,11 +342,11 @@ func (m Model) updateBrowseSetlistsKeys(k string) (tea.Model, tea.Cmd) {
 			for i, c := range charts {
 				doc, perr := parseStored(c.Content, m.chordMode)
 				if perr != nil {
-					views[i] = setlistChartView{title: c.Title, content: c.Content, lines: []string{"(unparsable chart)"}, keep: []bool{false}}
+					views[i] = setlistChartView{title: c.Title, content: c.Content, lines: []string{"(unparsable chart)"}, keep: []bool{false}, keepTab: []bool{false}, keepPage: []bool{false}}
 					continue
 				}
-				lines, keep := renderLines(doc, m.cfg)
-				views[i] = setlistChartView{title: doc.Title, content: c.Content, lines: lines, keep: keep}
+				lines, keep, keepTab, keepPage := renderLines(doc, m.cfg)
+				views[i] = setlistChartView{title: doc.Title, content: c.Content, lines: lines, keep: keep, keepTab: keepTab, keepPage: keepPage}
 			}
 			m.setlist.name = sl.Name
 			m.setlist.charts = views
@@ -583,7 +589,7 @@ func (m Model) openStoredChart(id int64) (tea.Model, tea.Cmd) {
 	m.title = doc.Title
 	m.transpose = 0
 	m.offset = 0
-	m.lines, m.keep = renderLines(doc, m.cfg)
+	m.lines, m.keep, m.keepTab, m.keepPage = renderLines(doc, m.cfg)
 	m.rawChart = stored.Content
 	m.message = ""
 	return m, nil
@@ -599,13 +605,13 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 		if m.doc != nil {
 			m.doc.Transpose(1)
 			m.transpose++
-			m.lines, m.keep = renderLines(m.doc, m.cfg)
+			m.lines, m.keep, m.keepTab, m.keepPage = renderLines(m.doc, m.cfg)
 		}
 	case k == m.keys.TransposeDown:
 		if m.doc != nil {
 			m.doc.Transpose(-1)
 			m.transpose--
-			m.lines, m.keep = renderLines(m.doc, m.cfg)
+			m.lines, m.keep, m.keepTab, m.keepPage = renderLines(m.doc, m.cfg)
 		}
 	case k == "L":
 		return m.openLibraryBrowser()
@@ -636,7 +642,7 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 				m.title = doc.Title
 				m.transpose = 0
 				m.offset = 0
-				m.lines, m.keep = renderLines(doc, m.cfg)
+				m.lines, m.keep, m.keepTab, m.keepPage = renderLines(doc, m.cfg)
 			}
 		}
 		m.message = "chord mode: " + m.chordMode.String()
@@ -703,7 +709,7 @@ func (m Model) useColumns() bool {
 		return false
 	}
 	colWidth := (m.width - columnGap) / 2
-	rows := expandDisplayRows(m.lines, m.keep, colWidth)
+	rows := expandDisplayRows(m.lines, m.keep, m.keepTab, colWidth)
 	return len(rows) > m.bodyHeight()
 }
 
@@ -721,20 +727,49 @@ func (m Model) visibleRows() int {
 // window back to the run's first line, and a page never ends inside a run
 // that fits. A run taller than the visible rows cannot be kept whole, so a
 // break is allowed there rather than collapsing the window to nothing.
-func pairSafeWindow(lines []string, keep []bool, offset, rows int) (int, int) {
+func pairSafeWindow(lines []string, keep, keepTab, keepPage []bool, offset, rows int) (int, int) {
 	top := offset
-	// Pull the top back to the start of the run the offset landed inside.
+	// Top: pull back over always-keep boundaries (pairs, header→first row) so
+	// a page never opens on an orphan lyric or a header's content without the
+	// header. For tab blocks and whole named sections, snap to the run start
+	// only when the run fits — over-tall runs stay scrollable.
 	for top > 0 && len(keep) > top-1 && keep[top-1] {
 		top--
 	}
-	bottom := min(top+rows, len(lines))
-	// End the page before any run it would cut, unless the run is too tall.
-	for bottom > top && bottom < len(lines) && bottom > 0 && len(keep) > bottom-1 && keep[bottom-1] {
-		s, e := runBounds(keep, bottom-1)
-		if e-s+1 > rows {
-			break
+	if top > 0 && len(keepTab) > top-1 && keepTab[top-1] {
+		if s, e := runBounds(keepTab, top); e-s+1 <= rows {
+			top = s
 		}
-		bottom = s
+	} else if top > 0 && len(keepPage) > top-1 && keepPage[top-1] {
+		if s, e := runBounds(keepPage, top); e-s+1 <= rows {
+			top = s
+		}
+	}
+	bottom := min(top+rows, len(lines))
+	// Bottom: never end a page on an always-keep boundary, and never inside a
+	// fitting tab block or whole named section. Over-tall runs break.
+	for bottom > top && bottom < len(lines) {
+		if len(keep) > bottom-1 && keep[bottom-1] {
+			bottom--
+			continue
+		}
+		if len(keepTab) > bottom-1 && keepTab[bottom-1] {
+			s, e := runBounds(keepTab, bottom-1)
+			if e-s+1 > rows {
+				break
+			}
+			bottom = s
+			continue
+		}
+		if len(keepPage) > bottom-1 && keepPage[bottom-1] {
+			s, e := runBounds(keepPage, bottom-1)
+			if e-s+1 > rows {
+				break
+			}
+			bottom = s
+			continue
+		}
+		break
 	}
 	if bottom < top {
 		bottom = top
@@ -757,7 +792,7 @@ func runBounds(keep []bool, i int) (int, int) {
 }
 
 func (m Model) visibleWindow() (int, int) {
-	return pairSafeWindow(m.lines, m.keep, m.offset, m.visibleRows())
+	return pairSafeWindow(m.lines, m.keep, m.keepTab, m.keepPage, m.offset, m.visibleRows())
 }
 
 func (m Model) View() string {
@@ -792,7 +827,7 @@ func (m Model) View() string {
 	top, bottom := m.visibleWindow()
 	if m.useColumns() {
 		divider := lipgloss.NewStyle().Faint(true).Render(dividerGlyph)
-		body = layoutColumns(m.lines[top:bottom], m.keep[top:bottom], m.width, m.bodyHeight(), divider)
+		body = layoutColumns(m.lines[top:bottom], m.keep[top:bottom], m.keepTab[top:bottom], m.width, m.bodyHeight(), divider)
 	}
 	if body == nil && top < len(m.lines) {
 		body = m.lines[top:bottom]
@@ -1019,8 +1054,10 @@ func (m Model) viewSetlist() string {
 	if m.setlist.index < len(m.setlist.charts) {
 		lines := m.setlist.charts[m.setlist.index].lines
 		keep := m.setlist.charts[m.setlist.index].keep
+		keepTab := m.setlist.charts[m.setlist.index].keepTab
+		keepPage := m.setlist.charts[m.setlist.index].keepPage
 		rows := max(m.bodyHeight()-1, 1) // header is always printed
-		top, bottom := pairSafeWindow(lines, keep, m.offset, rows)
+		top, bottom := pairSafeWindow(lines, keep, keepTab, keepPage, m.offset, rows)
 		for i := top; i < bottom; i++ {
 			sb.WriteString(lines[i])
 			sb.WriteString("\n")
@@ -1138,7 +1175,7 @@ func (m Model) openDiskFile(path string) (tea.Model, tea.Cmd) {
 	m.title = doc.Title
 	m.transpose = 0
 	m.offset = 0
-	m.lines, m.keep = renderLines(doc, m.cfg)
+	m.lines, m.keep, m.keepTab, m.keepPage = renderLines(doc, m.cfg)
 	m.message = ""
 	m.rawChart = string(content)
 	return m, nil
@@ -1380,7 +1417,7 @@ func (m Model) applyConversion(res aichart.Result, cerr error) Model {
 	m.doc = nd
 	m.title = nd.Title
 	m.transpose = 0
-	m.lines, m.keep = renderLines(nd, m.cfg)
+	m.lines, m.keep, m.keepTab, m.keepPage = renderLines(nd, m.cfg)
 	m.offset = 0
 	m.lastConverted = res.Chart
 	m.message = "converted · s: save to library"
