@@ -1,3 +1,7 @@
 charts/
 output.txt
 package-lock.json
+
+# Build output (go build ./cmd/chart-tty)
+/chart-tty
+*.exe
