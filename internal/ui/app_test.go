@@ -191,6 +191,39 @@ func TestModelWideButShortStaysSingleColumn(t *testing.T) {
 	}
 }
 
+func TestModelPageDownNoopWhenSongFitsOneScreen(t *testing.T) {
+	// 5 lines on a 3-row body: the whole song fits one two-column screen.
+	// Page down must not move — previously it collapsed to single-column and
+	// scrolled only the top few lines (the metadata "just disappearing" bug).
+	m := update(t, NewModel(testLines(5), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 84, Height: 3})
+	if !m.useColumns() {
+		t.Fatalf("expected two-column layout for %d lines", 5)
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	if got := m.Offset(); got != 0 {
+		t.Errorf("page down on one-screen song offset = %d, want 0 (no-op)", got)
+	}
+}
+
+func TestModelPageDownAdvancesFullTwoColumnPage(t *testing.T) {
+	// 12 lines on a 3-row body: two-column shows 6 lines per page, so one
+	// page-down must advance 6, not the single-column bodyHeight of 3.
+	m := update(t, NewModel(testLines(12), RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 84, Height: 3})
+	if !m.useColumns() {
+		t.Fatalf("expected two-column layout for %d lines", 12)
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	if got := m.Offset(); got != 6 {
+		t.Errorf("page down offset = %d, want 6 (full two-column page)", got)
+	}
+	if !m.useColumns() {
+		t.Error("layout must stay two-column after a page down (stable gate)")
+	}
+	if got := m.Offset(); got > len(testLines(12))-m.visibleRows() {
+		t.Errorf("offset %d exceeds max offset %d", got, len(testLines(12))-m.visibleRows())
+	}
+}
+
 func TestModelViewTitleAndHelp(t *testing.T) {
 	m := update(t, NewModel(testLines(3), RenderConfig{}).SetTitle("Swing Low"), tea.WindowSizeMsg{Width: 40, Height: 10})
 

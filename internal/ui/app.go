@@ -501,7 +501,7 @@ func (m Model) updateViewSetlistKeys(k string) (tea.Model, tea.Cmd) {
 		}
 	case "pgdown", " ":
 		if m.offset < maxOff {
-			m.offset += max(m.bodyHeight(), 1)
+			m.offset += m.visibleRows()
 			if m.offset > maxOff {
 				m.offset = maxOff
 			}
@@ -511,7 +511,7 @@ func (m Model) updateViewSetlistKeys(k string) (tea.Model, tea.Cmd) {
 		}
 	case "pgup", "b":
 		if m.offset > 0 {
-			m.offset -= max(m.bodyHeight(), 1)
+			m.offset -= m.visibleRows()
 			if m.offset < 0 {
 				m.offset = 0
 			}
@@ -609,9 +609,9 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 	case k == "o":
 		return m.openFilePicker()
 	case k == "pgup" || k == "b":
-		m.offset -= max(m.bodyHeight(), 1)
+		m.offset -= m.visibleRows()
 	case k == "pgdown" || k == " ":
-		m.offset += max(m.bodyHeight(), 1)
+		m.offset += m.visibleRows()
 	case k == "home" || k == "g":
 		m.offset = 0
 	case k == "end" || k == "G":
@@ -687,15 +687,18 @@ func (m Model) bodyHeight() int {
 }
 
 // useColumns reports whether the body should render side by side: the
-// terminal must be wide enough AND the content must exceed a single column
-// page. This is the single source of truth for layout mode — View and
-// clampOffset both derive from it so they can never disagree.
+// terminal must be wide enough AND the document must exceed a single column
+// page. The gate is based on the total document length, not the remaining
+// window, so the layout stays stable while scrolling — paging never causes a
+// mid-song collapse from two columns to one. This is the single source of
+// truth for layout mode — View and clampOffset both derive from it so they
+// can never disagree.
 func (m Model) useColumns() bool {
 	if !shouldUseColumns(m.width) {
 		return false
 	}
 	colWidth := (m.width - columnGap) / 2
-	rows := expandRows(m.body(), colWidth)
+	rows := expandRows(m.lines, colWidth)
 	return len(rows) > m.bodyHeight()
 }
 
