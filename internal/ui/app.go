@@ -196,6 +196,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusLine = nil
 		}
 		m = m.applyConversion(msg.result, msg.err)
+		// The status line advanced the terminal cursor past bubbletea's
+		// frame; force a full repaint so the altscreen re-aligns.
+		if m.width > 0 && m.height > 0 {
+			return m, func() tea.Msg { return tea.WindowSizeMsg{Width: m.width, Height: m.height} }
+		}
 	case conversionTickMsg:
 		if m.converting && m.convProgress != nil {
 			m.spinnerIdx++
