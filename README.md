@@ -2,6 +2,7 @@
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![Language Go](https://img.shields.io/badge/Language-Go-blue)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 Have you ever wanted to view a guitar chord chart in the terminal?
 
@@ -258,3 +259,7 @@ go vet ./...
 ```
 
 See `AGENTS.md` for the agentic workflow guide and `docs/LESSONS.md` for known pitfalls.
+
+## License
+
+Released under the [MIT License](LICENSE).
