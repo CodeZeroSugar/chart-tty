@@ -17,6 +17,7 @@ Output discipline:
 - Never truncate the song. Output the complete chart from first line to last.
 - Preserve the original lyrics and chord names exactly; never drop or invent content.
 - Directives must be alone on their own line.
+- STRICT chord grammar only. Chords must match the strict grammar; relaxed-mode chords like [Coda], [Chorus] or [Gm*] are invalid. Any non-chord bracket content must use the [*...] annotation form.
 - Environments must be properly matched: every {start_of_X} needs exactly one {end_of_X}
   of the same X before anything else opens, and never emit {end_of_X} unless that X is
   currently open. When in doubt, wrap each section in its own matched pair.
@@ -68,7 +69,21 @@ func promptSpecCore(ref string) string {
 		sb.WriteString(strings.TrimRight(seg, "\n"))
 		sb.WriteString("\n\n")
 	}
-	return strings.TrimRight(sb.String(), "\n")
+	return stripRelaxed(strings.TrimRight(sb.String(), "\n"))
+}
+
+// stripRelaxed removes the spec's relaxed-mode paragraph so the model is not
+// taught a grammar the strict-only AI validator rejects.
+func stripRelaxed(s string) string {
+	i := strings.Index(s, "In **relaxed** mode")
+	if i < 0 {
+		return s
+	}
+	j := strings.Index(s[i:], "\n\n")
+	if j < 0 {
+		j = len(s) - i
+	}
+	return s[:i] + s[i+j:]
 }
 
 func BuildPrompt(chart string) (system, user string) {

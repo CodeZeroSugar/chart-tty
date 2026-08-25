@@ -194,7 +194,7 @@ Comin' for to carry me [A7]home.
 		},
 		{
 			name:      "uppercase directives",
-			chart:     "{Title: A Song}\n{SOC}",
+			chart:     "{Title: A Song}\n{SOC}\nSwing [D]low\n{EOC}",
 			wantValid: true,
 		},
 		{
@@ -297,18 +297,26 @@ Comin' for to carry me [A7]home.
 			wantValid: true,
 		},
 		{
-			name:      "relaxed mode coda",
-			chart:     "[Coda]",
-			wantValid: true,
+			name:           "relaxed mode coda rejected under strict",
+			chart:          "[Coda]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
 		},
 		{
-			name:      "relaxed mode star extension",
-			chart:     "[Gm*]",
-			wantValid: true,
+			name:           "relaxed mode star extension rejected under strict",
+			chart:          "[Gm*]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
 		},
 		{
-			name:      "relaxed mode bracketed section word",
-			chart:     "[Chorus]",
+			name:           "relaxed mode section word rejected under strict",
+			chart:          "[Chorus]",
+			wantValid:      false,
+			wantErrContain: "invalid bracket content",
+		},
+		{
+			name:      "asterisk annotation always accepted",
+			chart:     "[*Chorus]",
 			wantValid: true,
 		},
 		{
@@ -355,6 +363,73 @@ func TestValidateChartXUnderscoreIgnored(t *testing.T) {
 	valid, err := v.ValidateChart("{x_mspro_pedal: 4}\n{title: Song}\nSwing [D]low")
 	if !valid {
 		t.Errorf("ValidateChart() valid = false for x_ directive, want true (spec: ignore silently); err=%v", err)
+	}
+}
+
+func TestValidateChartChorusShorthand(t *testing.T) {
+	v, err := NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, err := v.ValidateChart("{chorus}\nSwing [D]low\n{eoc}")
+	if !valid || err != nil {
+		t.Errorf("ValidateChart({chorus}...{eoc}) = %v, %v; want valid (chorus is an env start)", valid, err)
+	}
+}
+
+func TestValidateChartEnvCaseInsensitive(t *testing.T) {
+	v, err := NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Mismatched uppercase env must be caught, not bypassed.
+	if valid, err := v.ValidateChart("{SOC}\nSwing [D]low\n{EOT}"); valid || err == nil {
+		t.Errorf("uppercase mismatched envs = %v, %v; want invalid", valid, err)
+	}
+	// Matching uppercase envs are fine.
+	if valid, err := v.ValidateChart("{SOC}\nSwing [D]low\n{EOC}"); !valid || err != nil {
+		t.Errorf("uppercase matched envs = %v, %v; want valid", valid, err)
+	}
+}
+
+func TestValidateChartArbitraryEnvNames(t *testing.T) {
+	v, err := NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Symmetric matching for arbitrary names: mismatched end errors.
+	if valid, _ := v.ValidateChart("{start_of_intro}\n[G]bars\n{end_of_verse}"); valid {
+		t.Error("start_of_intro...end_of_verse should error (mismatched)")
+	}
+	if valid, _ := v.ValidateChart("{start_of_verse}\n[G]bars\n{end_of_intro}"); valid {
+		t.Error("start_of_verse...end_of_intro should error (mismatched)")
+	}
+	if valid, err := v.ValidateChart("{start_of_intro}\n[G]bars\n{end_of_intro}"); !valid || err != nil {
+		t.Errorf("matched arbitrary env = %v, %v; want valid", valid, err)
+	}
+}
+
+func TestValidateChartBracketsInDirectiveArguments(t *testing.T) {
+	v, err := NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Brackets inside a directive's arguments are text, not chords.
+	valid, err := v.ValidateChart("{comment: see [N.C.] here}\n[G]body")
+	if !valid || err != nil {
+		t.Errorf("brackets in comment directive = %v, %v; want valid", valid, err)
+	}
+}
+
+func TestValidateChartRelaxedMode(t *testing.T) {
+	v, err := NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v.ChordMode = RelaxedChords
+	valid, err := v.ValidateChart("[Coda] [Gm*] [Chorus]\n[C]body")
+	if !valid || err != nil {
+		t.Errorf("relaxed-mode chart = %v, %v; want valid", valid, err)
 	}
 }
 
@@ -420,9 +495,9 @@ func TestValidateChartCurrentBehaviorGaps(t *testing.T) {
 			wantValid: true,
 		},
 		{
-			name:      "unmatched soc without eoc passes",
+			name:      "unclosed environment errors",
 			chart:     "{start_of_chorus}\nSwing [D]low.",
-			wantValid: true,
+			wantValid: false,
 		},
 		{
 			name:      "multiple directives on one line fail",

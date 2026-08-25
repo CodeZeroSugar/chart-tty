@@ -108,6 +108,7 @@ func main() {
 	transposeFlag := flag.Int("transpose", 0, "transpose chords by N semitones")
 	configFlag := flag.String("config", "", "path to config file (default: ~/.config/chart-tty/config.toml)")
 	noColorFlag := flag.Bool("no-color", false, "disable colored output")
+	chordsFlag := flag.String("chords", "", "chord grammar: strict (default) or relaxed")
 	versionFlag := flag.Bool("version", false, "print version and exit")
 	aiConvertFlag := flag.Bool("ai-convert", false, "convert chart to compliant ChordPro via AI")
 	writeFlag := flag.Bool("write", false, "write converted chart to <name>.pro next to source (requires --ai-convert)")
@@ -177,6 +178,18 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Resolve the chord grammar: --chords flag overrides config, default strict.
+	chordModeStr := appCfg.Parser.Chords
+	if *chordsFlag != "" {
+		chordModeStr = *chordsFlag
+	}
+	chordMode, merr := parser.ParseChordMode(chordModeStr)
+	if merr != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", merr)
+		os.Exit(2)
+	}
+	parser.SetDefaultChordMode(chordMode)
 
 	rcfg := ui.RenderConfigFromConfig(appCfg)
 	if *noColorFlag || os.Getenv("NO_COLOR") != "" {
@@ -261,7 +274,7 @@ func main() {
 	isValid, verr := validator.ValidateChart(chart)
 
 	mode := parser.ModeChordPro
-	if (!isValid || parser.LooksLikeBasicChart(chart)) && !*aiConvertFlag {
+	if (!isValid || parser.LooksLikeBasicChart(chart, chordMode)) && !*aiConvertFlag {
 		if !isValid {
 			fmt.Fprintf(os.Stderr, "Warning: chart is not valid ChordPro (%v); falling back to basic mode\n", verr)
 		}

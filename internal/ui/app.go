@@ -42,6 +42,8 @@ type Model struct {
 	message    string
 	converting bool
 
+	chordMode parser.ChordMode
+
 	lastConverted string
 
 	screen        screen
@@ -72,7 +74,7 @@ type convertDoneMsg struct {
 }
 
 func NewModel(lines []string, cfg RenderConfig) Model {
-	return Model{lines: lines, cfg: cfg, keys: config.Default().Keys, showHelp: true}
+	return Model{lines: lines, cfg: cfg, keys: config.Default().Keys, showHelp: true, chordMode: parser.DefaultChordMode()}
 }
 
 func NewDocModel(doc *parser.Document, cfg RenderConfig) Model {
@@ -257,7 +259,7 @@ func (m Model) updateBrowseSetlistsKeys(k string) (tea.Model, tea.Cmd) {
 			}
 			views := make([]setlistChartView, len(charts))
 			for i, c := range charts {
-				doc, perr := parseStored(c.Content)
+				doc, perr := parseStored(c.Content, m.chordMode)
 				if perr != nil {
 					views[i] = setlistChartView{title: c.Title, lines: []string{"(unparsable chart)"}}
 					continue
@@ -462,7 +464,7 @@ func (m Model) openStoredChart(id int64) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("library error: %v", err)
 		return m, nil
 	}
-	doc, perr := parseStored(stored.Content)
+	doc, perr := parseStored(stored.Content, m.chordMode)
 	if perr != nil {
 		m.message = "stored chart failed to parse"
 		return m, nil
@@ -510,6 +512,23 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 	case k == "c":
 		nm, cmd := m.startConversion()
 		return nm, cmd
+	case k == "m":
+		if m.chordMode == parser.StrictChords {
+			m.chordMode = parser.RelaxedChords
+		} else {
+			m.chordMode = parser.StrictChords
+		}
+		if m.rawChart != "" {
+			if doc, err := parseStored(m.rawChart, m.chordMode); err == nil {
+				m.doc = doc
+				m.title = doc.Title
+				m.transpose = 0
+				m.offset = 0
+				m.lines = Render(doc, m.cfg)
+			}
+		}
+		m.message = "chord mode: " + m.chordMode.String()
+		return m, nil
 	case k == "i":
 		m = m.importCurrentChart()
 		return m, nil
@@ -679,22 +698,25 @@ func (m Model) viewBrowseCharts() string {
 }
 
 // parseStored detects the format of stored content and parses it, mirroring
-// the CLI's mode detection.
-func parseStored(content string) (*parser.Document, error) {
+// the CLI's mode detection under the given chord mode.
+func parseStored(content string, chordMode parser.ChordMode) (*parser.Document, error) {
 	validator, err := parser.NewValidator()
 	if err != nil {
 		return nil, err
 	}
+	validator.ChordMode = chordMode
 	isValid, verr := validator.ValidateChart(content)
 
 	mode := parser.ModeChordPro
-	if !isValid || parser.LooksLikeBasicChart(content) {
+	if !isValid || parser.LooksLikeBasicChart(content, chordMode) {
 		mode = parser.ModeBasic
 		if !isValid && verr != nil {
 			_ = verr // basic mode handles it
 		}
 	}
-	return parser.NewParser(mode).Parse(content)
+	p := parser.NewParser(mode)
+	p.ChordMode = chordMode
+	return p.Parse(content)
 }
 
 // viewBrowseSetlists renders the setlist listing (or the pick-setlist
@@ -886,6 +908,9 @@ func (m Model) Quitting() bool { return m.quitting }
 func (m Model) Offset() int { return m.offset }
 
 func (m Model) Transpose() int { return m.transpose }
+
+// ChordMode reports the active strict/relaxed grammar, for tests.
+func (m Model) ChordMode() parser.ChordMode { return m.chordMode }
 
 // Screen reports the current screen, for tests.
 func (m Model) Screen() string {

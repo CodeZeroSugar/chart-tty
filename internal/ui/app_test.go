@@ -405,6 +405,31 @@ func TestLibraryBrowserEmpty(t *testing.T) {
 	}
 }
 
+func TestModelChordModeToggle(t *testing.T) {
+	raw := "Coda\nGm*\nChorus"
+	m := update(t, NewModel(nil, RenderConfig{}).SetShowHelp(false).SetSource(raw), tea.WindowSizeMsg{Width: 60, Height: 10})
+
+	if got := m.ChordMode(); got != parser.StrictChords {
+		t.Fatalf("initial mode = %v, want strict", got)
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	if got := m.ChordMode(); got != parser.RelaxedChords {
+		t.Errorf("after toggle mode = %v, want relaxed", got)
+	}
+	if !strings.Contains(m.View(), "chord mode: relaxed") {
+		t.Errorf("view %q missing mode message", m.View())
+	}
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	if got := m.ChordMode(); got != parser.StrictChords {
+		t.Errorf("after second toggle mode = %v, want strict", got)
+	}
+	if !strings.Contains(m.View(), "chord mode: strict") {
+		t.Errorf("view %q missing strict message", m.View())
+	}
+}
+
 func TestDeleteChartFromBrowser(t *testing.T) {
 	s := testStore(t)
 	id1, _ := s.AddChart("Keep Me", "", "import", "{title: Keep Me}\n[G]x")

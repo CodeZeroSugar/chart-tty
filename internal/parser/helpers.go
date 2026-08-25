@@ -74,7 +74,11 @@ func extractBracketContents(line string) []string {
 	return contents
 }
 
-func validateBracketContent(raw string) bool {
+// validateBracketContent reports whether bracket content is acceptable under
+// the given chord mode. A leading '*' marks an annotation and is always
+// accepted. Strict mode requires the strict grammar; relaxed mode also
+// accepts spec relaxed chords (valid root + any non-empty extension tail).
+func validateBracketContent(raw string, mode ChordMode) bool {
 	r := strings.TrimSpace(raw)
 	if r == "" {
 		return false
@@ -82,29 +86,30 @@ func validateBracketContent(raw string) bool {
 	if r[0] == '*' {
 		return true
 	}
-	// Strict grammar first; spec relaxed mode (valid root + any extension
-	// tail, e.g. [Coda], [Gm*]) accepts the rest.
-	return strictChordRe.MatchString(r) || relaxedChordRe.MatchString(r)
+	if strictChordRe.MatchString(r) {
+		return true
+	}
+	return mode == RelaxedChords && relaxedChordRe.MatchString(r)
 }
 
 func isTabLine(s string) bool {
 	return strings.Contains(s, "--") || (strings.Contains(s, "|") && strings.Contains(s, "-"))
 }
 
-func isChordLine(line string) bool {
+func isChordLine(line string, mode ChordMode) bool {
 	l := strings.TrimSpace(line)
 	if l == "" {
 		return false
 	}
 	for _, tok := range strings.Fields(l) {
-		if !validateBracketContent(tok) {
+		if !validateBracketContent(tok, mode) {
 			return false
 		}
 	}
 	return true
 }
 
-func extractBasicChords(line string) []ChordToken {
+func extractBasicChords(line string, mode ChordMode) []ChordToken {
 	var out []ChordToken
 	i := 0
 	for i < len(line) {
@@ -118,7 +123,7 @@ func extractBasicChords(line string) []ChordToken {
 		for i < len(line) && line[i] != ' ' && line[i] != '\t' {
 			i++
 		}
-		if tok := line[start:i]; validateBracketContent(tok) {
+		if tok := line[start:i]; validateBracketContent(tok, mode) {
 			out = append(out, ChordToken{Name: tok, Position: start})
 		}
 	}
@@ -132,14 +137,14 @@ func DetectParserMode(valid bool, err error) ParserMode {
 	return ModeBasic
 }
 
-func LooksLikeBasicChart(chart string) bool {
+func LooksLikeBasicChart(chart string, mode ChordMode) bool {
 	sawChordLine := false
 	for _, line := range strings.Split(chart, "\n") {
 		l := strings.TrimSpace(line)
 		if strings.Contains(l, "{") || strings.Contains(l, "[") {
 			return false
 		}
-		if isChordLine(l) {
+		if isChordLine(l, mode) {
 			sawChordLine = true
 		}
 	}

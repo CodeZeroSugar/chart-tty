@@ -2,6 +2,40 @@ package parser
 
 import "testing"
 
+func TestParseChordMode(t *testing.T) {
+	tests := []struct {
+		in    string
+		want  ChordMode
+		isErr bool
+	}{
+		{"strict", StrictChords, false},
+		{"STRICT", StrictChords, false},
+		{"relaxed", RelaxedChords, false},
+		{"Relaxed", RelaxedChords, false},
+		{"  strict  ", StrictChords, false},
+		{"bogus", StrictChords, true},
+		{"", StrictChords, true},
+	}
+	for _, tt := range tests {
+		got, err := ParseChordMode(tt.in)
+		if tt.isErr {
+			if err == nil {
+				t.Errorf("ParseChordMode(%q) expected error", tt.in)
+			}
+			continue
+		}
+		if err != nil || got != tt.want {
+			t.Errorf("ParseChordMode(%q) = %v, %v; want %v", tt.in, got, err, tt.want)
+		}
+	}
+}
+
+func TestChordModeString(t *testing.T) {
+	if StrictChords.String() != "strict" || RelaxedChords.String() != "relaxed" {
+		t.Errorf("String() = %q / %q, want strict / relaxed", StrictChords.String(), RelaxedChords.String())
+	}
+}
+
 func TestParseChord(t *testing.T) {
 	tests := []struct {
 		name string

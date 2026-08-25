@@ -153,6 +153,32 @@ func TestConvertProgressEvents(t *testing.T) {
 	}
 }
 
+func TestConvertStrictRejectsRelaxedChords(t *testing.T) {
+	// Strict-only validation: a relaxed chord like [Coda] must be rejected and
+	// retried, while the [*...] annotation form is accepted.
+	calls := 0
+	srv := mockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.Write([]byte(jsonBody("{title: X}\n[Coda]")))
+			return
+		}
+		w.Write([]byte(jsonBody(validChart)))
+	})
+	cl := Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
+
+	res, err := cl.Convert("messy")
+	if err != nil {
+		t.Fatalf("Convert() unexpected error: %v", err)
+	}
+	if res.Attempts != 2 {
+		t.Errorf("Attempts = %d, want 2 (relaxed [Coda] must fail strict validation once)", res.Attempts)
+	}
+	if res.Chart != validChart {
+		t.Errorf("Chart = %q, want %q", res.Chart, validChart)
+	}
+}
+
 func TestConvertNilCallbackStillWorks(t *testing.T) {
 	srv := mockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(jsonBody(validChart)))

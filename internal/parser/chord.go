@@ -15,6 +15,48 @@ type Chord struct {
 
 var chordQualifiers = []string{"maj", "min", "dim", "aug", "sus", "add", "mi", "m", "h"}
 
+// ChordMode selects between the spec's strict and relaxed chord grammars.
+type ChordMode int
+
+const (
+	// StrictChords accepts only spec strict-mode chords: a root, optional
+	// qualifier, known extension tokens, and an optional slash bass.
+	StrictChords ChordMode = iota
+	// RelaxedChords additionally accepts spec relaxed mode: a valid root plus
+	// any non-empty extension tail (e.g. [Coda], [Gm*]).
+	RelaxedChords
+)
+
+// defaultChordMode governs helpers (validator, basic-format detection) unless
+// an instance overrides it. Set at startup from config.
+var defaultChordMode = StrictChords
+
+// SetDefaultChordMode sets the package-wide chord mode used by new
+// Validator/Parser instances and the mode-agnostic helpers.
+func SetDefaultChordMode(m ChordMode) { defaultChordMode = m }
+
+// DefaultChordMode returns the package-wide chord mode.
+func DefaultChordMode() ChordMode { return defaultChordMode }
+
+func (m ChordMode) String() string {
+	if m == RelaxedChords {
+		return "relaxed"
+	}
+	return "strict"
+}
+
+// ParseChordMode parses "strict" or "relaxed" (case-insensitive).
+func ParseChordMode(s string) (ChordMode, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "strict":
+		return StrictChords, nil
+	case "relaxed":
+		return RelaxedChords, nil
+	default:
+		return StrictChords, fmt.Errorf("unknown chord mode %q (want \"strict\" or \"relaxed\")", s)
+	}
+}
+
 // strictChordRe is the enforced ChordPro strict grammar. Roots include the
 // German H (= B natural). Bass may be a root note or a number (G6/9).
 var strictChordRe = regexp.MustCompile(`^[A-GH][b#]?(?:maj|min|mi|m|dim|aug|sus|add|h)?(?:[0-9]+|sus[0-9]*|add[0-9]*|maj[0-9]*|\^[0-9]*|[b#-][0-9]+|alt|\+)*(\/(?:[A-GH][b#]?|[0-9]+))?$`)

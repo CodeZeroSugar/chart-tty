@@ -68,5 +68,8 @@ func validate(chart string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// AI conversion always uses the strict chord grammar, regardless of the
+	// user's strict/relaxed preference for their own charts.
+	v.ChordMode = parser.StrictChords
 	return v.ValidateChart(chart)
 }

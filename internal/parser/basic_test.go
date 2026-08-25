@@ -30,7 +30,7 @@ func TestIsChordLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isChordLine(tt.line); got != tt.want {
+			if got := isChordLine(tt.line, StrictChords); got != tt.want {
 				t.Errorf("isChordLine(%q) = %v, want %v", tt.line, got, tt.want)
 			}
 		})
@@ -54,7 +54,7 @@ func TestExtractBasicChords(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractBasicChords(tt.line)
+			got := extractBasicChords(tt.line, StrictChords)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("extractBasicChords(%q) = %#v, want %#v", tt.line, got, tt.want)
 			}

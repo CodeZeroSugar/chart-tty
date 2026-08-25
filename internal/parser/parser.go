@@ -16,6 +16,9 @@ const (
 
 type Parser struct {
 	Mode ParserMode
+	// ChordMode governs basic-format chord-line detection. ChordPro mode
+	// extraction is mode-agnostic (bracket names are captured regardless).
+	ChordMode ChordMode
 
 	doc            *Document
 	currentSection *Section
@@ -25,7 +28,8 @@ type Parser struct {
 
 func NewParser(mode ParserMode) *Parser {
 	return &Parser{
-		Mode: mode,
+		Mode:      mode,
+		ChordMode: defaultChordMode,
 	}
 }
 
@@ -123,7 +127,7 @@ func (p *Parser) parseBasic(chart string) error {
 			class[i] = kindComment
 		case isTabLine(strings.TrimSpace(ln)):
 			class[i] = kindTab
-		case isChordLine(ln):
+		case isChordLine(ln, p.ChordMode):
 			class[i] = kindChord
 		default:
 			class[i] = kindLyric
@@ -148,7 +152,7 @@ func (p *Parser) parseBasic(chart string) error {
 					Type:   LineTypeChordAndLyric,
 					Raw:    lines[i+1],
 					Lyrics: lines[i+1],
-					Chords: extractBasicChords(lines[i]),
+					Chords: extractBasicChords(lines[i], p.ChordMode),
 				})
 				i++
 			} else {
@@ -156,7 +160,7 @@ func (p *Parser) parseBasic(chart string) error {
 					Type:   LineTypeChord,
 					Raw:    strings.TrimSpace(lines[i]),
 					Lyrics: "",
-					Chords: extractBasicChords(lines[i]),
+					Chords: extractBasicChords(lines[i], p.ChordMode),
 				})
 			}
 		case kindLyric:

@@ -9,11 +9,13 @@ import (
 
 type Validator struct {
 	AllowUnkDirectives bool
+	ChordMode          ChordMode
 }
 
 func NewValidator() (*Validator, error) {
 	return &Validator{
 			AllowUnkDirectives: false,
+			ChordMode:          defaultChordMode,
 		},
 		nil
 }
@@ -53,17 +55,17 @@ func (v *Validator) ValidateChart(chart string) (bool, error) {
 		if strings.Contains(l, "{") && !strings.Contains(l, "}") {
 			return false, fmt.Errorf("syntax error: unclosed directive on line %d", n+1)
 		}
-		if strings.HasPrefix(l, "{") && strings.HasSuffix(l, "}") {
+		directiveLine := strings.HasPrefix(l, "{") && strings.HasSuffix(l, "}")
+		if directiveLine {
 			directive, _ := extractDirective(l)
-
 			if !v.IsValidDirective(directive) {
 				return false, fmt.Errorf("directive error: invalid directive '%s' on line %d", l, n+1)
 			}
-			if directive == "chorus" {
-				continue
-			}
-			if slices.Contains(Spec.EnvironmentDirectives, directive) {
-				action, name, _ := parseEnvDirective(directive)
+			// Environment matching is case-insensitive and covers both the
+			// standard environments and arbitrary start_of_*/end_of_* names.
+			d := strings.ToLower(directive)
+			if slices.Contains(Spec.EnvironmentDirectives, d) || strings.HasPrefix(d, "start_of_") || strings.HasPrefix(d, "end_of_") {
+				action, name, _ := parseEnvDirective(d)
 				switch action {
 				case "start":
 					currentEnv = name
@@ -71,8 +73,11 @@ func (v *Validator) ValidateChart(chart string) (bool, error) {
 					if name != currentEnv {
 						return false, fmt.Errorf("directive error: end of current environment not found: %s", currentEnv)
 					}
+					currentEnv = ""
 				}
 			}
+			// Brackets inside a directive's arguments are text, not chords.
+			continue
 		}
 
 		if strings.ContainsAny(l, "[]") {
@@ -81,11 +86,15 @@ func (v *Validator) ValidateChart(chart string) (bool, error) {
 			}
 			bracketContent := extractBracketContents(l)
 			for _, bc := range bracketContent {
-				if !validateBracketContent(bc) {
+				if !validateBracketContent(bc, v.ChordMode) {
 					return false, fmt.Errorf("syntax error: invalid bracket content on line %d", n+1)
 				}
 			}
 		}
+	}
+
+	if currentEnv != "" {
+		return false, fmt.Errorf("directive error: unclosed environment: %s", currentEnv)
 	}
 
 	return true, nil

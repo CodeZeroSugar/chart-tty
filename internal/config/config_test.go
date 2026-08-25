@@ -79,6 +79,25 @@ func TestLoadMalformed(t *testing.T) {
 	}
 }
 
+func TestParserConfigChords(t *testing.T) {
+	if cfg := Default(); cfg.Parser.Chords != "strict" {
+		t.Errorf("default chords = %q, want strict", cfg.Parser.Chords)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte("[parser]\nchords = \"relaxed\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(): %v", err)
+	}
+	if cfg.Parser.Chords != "relaxed" {
+		t.Errorf("chords = %q, want relaxed", cfg.Parser.Chords)
+	}
+}
+
 func TestDefaultPath(t *testing.T) {
 	path, err := DefaultPath()
 	if err != nil {

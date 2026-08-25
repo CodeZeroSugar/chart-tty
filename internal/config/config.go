@@ -15,6 +15,13 @@ type Config struct {
 	Keys    KeyConfig     `toml:"keys"`
 	AI      AIConfig      `toml:"ai"`
 	Library LibraryConfig `toml:"library"`
+	Parser  ParserConfig  `toml:"parser"`
+}
+
+// ParserConfig holds parsing options. ChordMode is "strict" (default) or
+// "relaxed"; the AI converter always uses strict regardless of this setting.
+type ParserConfig struct {
+	Chords string `toml:"chords"`
 }
 
 // LibraryConfig holds chart library settings. An empty Path means the
@@ -56,6 +63,7 @@ func Default() Config {
 			BaseURL: "https://api.openai.com/v1",
 			Model:   "gpt-4o-mini",
 		},
+		Parser: ParserConfig{Chords: "strict"},
 	}
 }
 
@@ -98,6 +106,11 @@ scroll_down = "j"
 scroll_up = "k"
 transpose_up = "+"
 transpose_down = "-"
+
+[parser]
+# Chord grammar for user charts: "strict" (default) or "relaxed".
+# The AI converter always uses strict.
+chords = "strict"
 
 [ai]
 # OpenAI-compatible endpoint. Works with OpenAI, gateways, Ollama/LM Studio local models.

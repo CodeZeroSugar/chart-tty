@@ -26,6 +26,7 @@ rendered chart as plain text instead.
 | Flag | Description |
 |------|-------------|
 | `--transpose N` | Transpose all chords by N semitones (negative for down) |
+| `--chords strict\|relaxed` | Chord grammar (default strict; relaxed accepts `[Coda]`, `[Gm*]`) |
 | `--config PATH` | Config file path (default `~/.config/chart-tty/config.toml`) |
 | `--set-api-key KEY` | Store the AI API key in the config file (`-` reads it from stdin) |
 | `--no-color` | Disable colored output (also honors `NO_COLOR` env var) |
@@ -46,6 +47,7 @@ rendered chart as plain text instead.
 | `b` / `PgUp` | Page up |
 | `g` / `G` or home / end | Jump to top / bottom |
 | `+` / `-` | Transpose up / down |
+| `m` | Toggle strict / relaxed chord parsing |
 | `i` | Import the loaded chart into the library |
 | `L` / `S` | Browse the chart library / setlists |
 | `c` | Convert the loaded chart to ChordPro via AI |

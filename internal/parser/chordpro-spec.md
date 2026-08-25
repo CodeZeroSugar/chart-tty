@@ -144,11 +144,18 @@ Deliberate deviations and enforcement choices compared to the spec above:
   treats directive names case-sensitively in practice.
 - **`{subtitle}`/`{st}` maps to the Artist field** — a chart-tty convention based on
   real-world charts.
-- **Bracket content**: strict grammar first; otherwise **spec relaxed mode** applies — a
-  valid root (`[A-GH]` + optional `b`/`#`) plus any non-empty extension tail is accepted
-  (e.g. `[Coda]`, `[Gm*]`, `[Chorus]`). Only content that cannot start a chord (`[N.C.]`,
-  `[----]`, `[1]`, `[foo]`) requires the `[*...]` escape. Pipes are excluded from relaxed
-  tails so TAB lines never parse as chords.
+- **Bracket content**: strict grammar is the **default** for user charts. Relaxed mode is an
+  opt-in (`[parser] chords = "relaxed"` config or `--chords relaxed` flag, or the TUI `m`
+  key), where a valid root (`[A-GH]` + optional `b`/`#`) plus any non-empty extension tail
+  is accepted (e.g. `[Coda]`, `[Gm*]`, `[Chorus]`). Only content that cannot start a chord
+  (`[N.C.]`, `[----]`, `[1]`, `[foo]`) requires the `[*...]` escape. Pipes are excluded
+  from relaxed tails so TAB lines never parse as chords. **The AI converter always uses
+  strict mode**, and its prompt excludes the relaxed grammar.
+- **Bracket validation applies to lyric lines only** — brackets inside directive arguments
+  (`{comment: [N.C.]}`) are text, not chords.
+- **Environment matching is case-insensitive** and covers standard environments, arbitrary
+  `start_of_*`/`end_of_*` names, and the `{chorus}` shorthand (`{chorus}`…`{eoc}` valid).
+  An environment left unclosed at end of input is an error.
 - **Chord grammar**: roots `[A-GH]` (+ `b`/`#`; German `H` = B natural), qualifier set
   (`maj,min,mi,m,dim,aug,sus,add,h`), numeric/altered extension tokens, slash bass that may
   be a root or a number (`G6/9`). Dutch note names (Bes/As), Roman numerals and Nashville
