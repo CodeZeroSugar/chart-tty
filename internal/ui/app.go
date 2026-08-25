@@ -71,8 +71,9 @@ type Model struct {
 
 // setlistChartView is one chart inside an open setlist, pre-rendered.
 type setlistChartView struct {
-	title string
-	lines []string
+	title   string
+	content string
+	lines   []string
 }
 
 type convertDoneMsg struct {
@@ -270,10 +271,10 @@ func (m Model) updateBrowseSetlistsKeys(k string) (tea.Model, tea.Cmd) {
 			for i, c := range charts {
 				doc, perr := parseStored(c.Content, m.chordMode)
 				if perr != nil {
-					views[i] = setlistChartView{title: c.Title, lines: []string{"(unparsable chart)"}}
+					views[i] = setlistChartView{title: c.Title, content: c.Content, lines: []string{"(unparsable chart)"}}
 					continue
 				}
-				views[i] = setlistChartView{title: doc.Title, lines: Render(doc, m.cfg)}
+				views[i] = setlistChartView{title: doc.Title, content: c.Content, lines: Render(doc, m.cfg)}
 			}
 			m.setlist.name = sl.Name
 			m.setlist.charts = views
@@ -437,6 +438,11 @@ func (m Model) updateViewSetlistKeys(k string) (tea.Model, tea.Cmd) {
 		m.offset = max(0, len(m.setlist.charts[n-1].lines)-m.bodyHeight())
 	case "esc":
 		return m.openSetlistBrowser()
+	case "c":
+		if idx := m.setlist.index; idx >= 0 && idx < len(m.setlist.charts) {
+			m.rawChart = m.setlist.charts[idx].content
+		}
+		return m.startConversion()
 	}
 	return m, nil
 }
@@ -484,6 +490,7 @@ func (m Model) openStoredChart(id int64) (tea.Model, tea.Cmd) {
 	m.transpose = 0
 	m.offset = 0
 	m.lines = Render(doc, m.cfg)
+	m.rawChart = stored.Content
 	m.message = ""
 	return m, nil
 }
@@ -994,8 +1001,12 @@ func (m Model) startConversion() (Model, tea.Cmd) {
 	if m.converting {
 		return m, nil
 	}
-	if m.converter == nil || m.rawChart == "" {
-		m.message = "AI conversion not configured"
+	if m.converter == nil {
+		m.message = "AI conversion not configured (set an API key)"
+		return m, nil
+	}
+	if m.rawChart == "" {
+		m.message = "no chart to convert — open a chart first"
 		return m, nil
 	}
 	m.converting = true

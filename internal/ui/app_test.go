@@ -559,6 +559,108 @@ func TestViewMessageRightAligned(t *testing.T) {
 	}
 }
 
+func mockCaptureConverter(t *testing.T, onUser func(string)) *aichart.Client {
+	t.Helper()
+	converted := "{title: Converted Song}\n{start_of_chorus}\nSwing [D]low\n{eoc}"
+	resp, _ := json.Marshal(map[string]any{
+		"choices": []map[string]any{{"message": map[string]any{"content": converted}}},
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decoding request: %v", err)
+		}
+		if len(req.Messages) == 2 && onUser != nil {
+			onUser(req.Messages[1].Content)
+		}
+		w.Write(resp)
+	}))
+	t.Cleanup(srv.Close)
+	return &aichart.Client{BaseURL: srv.URL, Model: "m", HTTP: srv.Client()}
+}
+
+func TestConvertAfterLibraryOpen(t *testing.T) {
+	s := testStore(t)
+	var gotUser string
+	client := mockCaptureConverter(t, func(u string) { gotUser = u })
+
+	stored := "{title: Stored Song}\n[G]body"
+	_, _ = s.AddChart("Stored Song", "", "import", stored)
+
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetStore(s).SetConverter(client), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // open the stored chart
+
+	if m.rawChart != stored {
+		t.Fatalf("rawChart after library open = %q, want stored content", m.rawChart)
+	}
+
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	m2, ok := nm.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T", nm)
+	}
+	if cmd == nil {
+		t.Fatal("c after library open must start a conversion")
+	}
+	done := cmd()
+	cdm, ok := done.(convertDoneMsg)
+	if !ok {
+		t.Fatalf("cmd produced %T, want convertDoneMsg", done)
+	}
+	if gotUser != stored {
+		t.Errorf("model sent %q, want the stored chart content %q", gotUser, stored)
+	}
+	m3 := update(t, m2, cdm)
+	if !strings.Contains(m3.View(), "Converted Song") {
+		t.Errorf("view %q missing converted title", m3.View())
+	}
+}
+
+func TestConvertInSetlistView(t *testing.T) {
+	s := testStore(t)
+	var gotUser string
+	client := mockCaptureConverter(t, func(u string) { gotUser = u })
+
+	content := "{title: Set Song}\n[C]body"
+	id, _ := s.AddChart("Set Song", "", "import", content)
+	slID, _ := s.CreateSetlist("Gig")
+	_ = s.AppendSetlistItem(slID, id)
+
+	m := update(t, NewModel(nil, RenderConfig{}).SetShowHelp(false).SetStore(s).SetConverter(client), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // open setlist
+
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if _, ok := nm.(Model); !ok {
+		t.Fatalf("Update returned %T", nm)
+	}
+	if cmd == nil {
+		t.Fatal("c in setlist view must start a conversion")
+	}
+	if _, ok := cmd().(convertDoneMsg); !ok {
+		t.Fatalf("cmd produced %T, want convertDoneMsg", cmd())
+	}
+	if gotUser != content {
+		t.Errorf("model sent %q, want the current setlist chart %q", gotUser, content)
+	}
+}
+
+func TestConvertNoRawChartMessage(t *testing.T) {
+	client := &aichart.Client{BaseURL: "http://unused", Model: "m"}
+	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false).SetConverter(client), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if !strings.Contains(m.View(), "no chart to convert") {
+		t.Errorf("view %q missing no-chart-to-convert message", m.View())
+	}
+}
+
 func TestDeleteChartFromBrowser(t *testing.T) {
 	s := testStore(t)
 	id1, _ := s.AddChart("Keep Me", "", "import", "{title: Keep Me}\n[G]x")
