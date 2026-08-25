@@ -507,6 +507,58 @@ func TestFilePickerEmptyDir(t *testing.T) {
 	}
 }
 
+func TestHeaderRow(t *testing.T) {
+	tests := []struct {
+		name    string
+		title   string
+		msg     string
+		width   int
+		wantMsg string
+	}{
+		{"no message", "Swing Low", "", 40, ""},
+		{"message right aligned", "Swing Low", "converted", 40, "converted"},
+		{"short width truncates message", "Swing Low Sweet Chariot Long Title", "AI conversion failed", 40, "…"},
+		{"wide fit", "T", "AI conversion failed: gateway exploded", 80, "AI conversion failed: gateway exploded"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			row := headerRow(tt.title, tt.msg, tt.width)
+			if tt.msg == "" {
+				// Title-only row is unpadded; the message case is padded.
+				if !strings.Contains(row, tt.title) {
+					t.Errorf("headerRow() = %q, missing title", row)
+				}
+				return
+			}
+			if w := displayWidth(row); w != tt.width {
+				t.Errorf("headerRow() display width = %d, want %d (row=%q)", w, tt.width, row)
+			}
+			if tt.wantMsg == "…" {
+				if !strings.HasSuffix(row, "…") {
+					t.Errorf("headerRow() = %q, want ellipsis truncation", row)
+				}
+				return
+			}
+			if !strings.Contains(row, tt.wantMsg) {
+				t.Errorf("headerRow() = %q, missing %q", row, tt.wantMsg)
+			}
+		})
+	}
+}
+
+func TestViewMessageRightAligned(t *testing.T) {
+	doc := &parser.Document{Title: "Song", Metadata: map[string][]string{}}
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 60, Height: 10})
+	m.message = "converting…"
+	header := strings.SplitN(m.View(), "\n", 2)[0]
+	if w := displayWidth(header); w != 60 {
+		t.Errorf("header display width = %d, want 60", w)
+	}
+	if !strings.HasSuffix(header, "converting…") {
+		t.Errorf("header %q does not end with the message (right-aligned)", header)
+	}
+}
+
 func TestDeleteChartFromBrowser(t *testing.T) {
 	s := testStore(t)
 	id1, _ := s.AddChart("Keep Me", "", "import", "{title: Keep Me}\n[G]x")
@@ -811,7 +863,9 @@ func TestModelConvertNoDoubleStart(t *testing.T) {
 
 func TestModelConvertNotConfiguredMessage(t *testing.T) {
 	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
-	nm, cmd := NewDocModel(doc, RenderConfig{}).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 60, Height: 10})
+
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 	m, ok := nm.(Model)
 	if !ok {
 		t.Fatalf("Update returned %T, want Model", nm)
@@ -830,7 +884,7 @@ func TestModelConvertNotConfiguredMessage(t *testing.T) {
 func TestConvertFailureShowsErrorDetail(t *testing.T) {
 	s := testStore(t)
 	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
-	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 40, Height: 10})
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 80, Height: 10})
 
 	m = update(t, m, convertDoneMsg{err: errors.New("gateway exploded")})
 	view := m.View()
