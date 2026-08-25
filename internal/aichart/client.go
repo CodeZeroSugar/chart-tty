@@ -2,13 +2,16 @@ package aichart
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
 )
@@ -25,7 +28,7 @@ func FromConfig(c config.Config) Client {
 		BaseURL: c.AI.BaseURL,
 		APIKey:  c.AI.APIKey,
 		Model:   c.AI.Model,
-		HTTP:    &http.Client{},
+		HTTP:    ipv4HTTPClient(),
 	}
 	if v := os.Getenv("CHART_TTY_BASE_URL"); v != "" {
 		cl.BaseURL = v
@@ -37,6 +40,21 @@ func FromConfig(c config.Config) Client {
 		cl.Model = v
 	}
 	return cl
+}
+
+// ipv4HTTPClient returns an HTTP client whose dialer only uses IPv4. Some
+// networks route IPv6 to a broken path that answers empty 404s (observed for
+// the Google Gemini API), and Go's resolver prefers IPv6 when DNS lists AAAA
+// records first — so requests can silently fail without ever falling back.
+func ipv4HTTPClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	return &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialer.DialContext(ctx, "tcp4", addr)
+			},
+		},
+	}
 }
 
 type chatRequest struct {

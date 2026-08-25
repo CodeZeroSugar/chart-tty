@@ -127,3 +127,14 @@ func TestFromConfigDefaults(t *testing.T) {
 		t.Errorf("client = %#v, want config defaults", cl)
 	}
 }
+
+func TestFromConfigUsesIPv4Dialer(t *testing.T) {
+	cl := FromConfig(config.Default())
+	tr, ok := cl.HTTP.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("client transport = %T, want *http.Transport", cl.HTTP.Transport)
+	}
+	if tr.DialContext == nil {
+		t.Fatal("transport has no DialContext (IPv4-forcing dialer not wired)")
+	}
+}
