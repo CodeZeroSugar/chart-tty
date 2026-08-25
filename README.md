@@ -1,8 +1,22 @@
 # chart-tty
 
-A terminal chord chart viewer. Reads song charts in **ChordPro** (`.pro`) format and basic
-chord-over-lyrics text format, converts them into a structured document, and renders them in
-an interactive TUI with chords aligned above their lyrics.
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Language Go](https://img.shields.io/badge/Language-Go-blue)
+
+Have you ever wanted to view a guitar chord chart in the terminal?
+
+No?
+
+Understandable, but now you can with chart-tty! Chart-tty is a TUI-based application that allows you to render
+chord charts right in your terminal. Chart-tty primarily uses the [ChordPro](https://www.chordpro.org/chordpro/home/) specification
+to ensure the chord notation is rendered above the lyrics in the correct spots, but it can also just display any
+old text file you give it.
+
+The TUI includes several features such as saving charts in a local database, creating setlists to organize charts for a gig,
+and even AI-driven chart conversion so that you can transform any old chord sheet into a
+ChordPro chart for optimal rendering! (Generative AI is non-deterministic, results may vary)
+
+If you are a tech-savvy individual who doesn't use a tablet for displaying charts (Huh?) then this may be the solution for you!
 
 ## Install
 
@@ -25,39 +39,39 @@ plain text instead.
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
-| `--transpose N` | Transpose all chords by N semitones (negative for down) |
-| `--chords strict\|relaxed` | Chord grammar (default strict; relaxed accepts `[Coda]`, `[Gm*]`) |
-| `--config PATH` | Config file path (default `~/.config/chart-tty/config.toml`) |
-| `--set-api-key KEY` | Store the AI API key in the config file (`-` reads it from stdin) |
-| `--no-color` | Disable colored output (also honors `NO_COLOR` env var) |
-| `--ai-convert` | Convert chart to compliant ChordPro via AI |
-| `--write` | Write converted chart to `<name>.pro` next to source (requires `--ai-convert`) |
-| `--import PATH` | Import a chart file into the library and exit |
-| `--delete ID` | Delete a chart from the library by id and exit |
-| `--version` | Print version and exit |
-| `-h`, `--help` | Show usage and exit |
+| Flag                       | Description                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `--transpose N`            | Transpose all chords by N semitones (negative for down)                        |
+| `--chords strict\|relaxed` | Chord grammar (default strict; relaxed accepts `[Coda]`, `[Gm*]`)              |
+| `--config PATH`            | Config file path (default `~/.config/chart-tty/config.toml`)                   |
+| `--set-api-key KEY`        | Store the AI API key in the config file (`-` reads it from stdin)              |
+| `--no-color`               | Disable colored output (also honors `NO_COLOR` env var)                        |
+| `--ai-convert`             | Convert chart to compliant ChordPro via AI                                     |
+| `--write`                  | Write converted chart to `<name>.pro` next to source (requires `--ai-convert`) |
+| `--import PATH`            | Import a chart file into the library and exit                                  |
+| `--delete ID`              | Delete a chart from the library by id and exit                                 |
+| `--version`                | Print version and exit                                                         |
+| `-h`, `--help`             | Show usage and exit                                                            |
 
 ### TUI keys
 
-| Key | Action |
-|-----|--------|
-| `q` / `ctrl+c` | Quit |
-| `j` / `k` or arrows | Scroll down / up |
-| `space` / `PgDn` | Page down |
-| `b` / `PgUp` | Page up |
-| `g` / `G` or home / end | Jump to top / bottom |
-| `+` / `-` | Transpose up / down (header shows the current key, e.g. `Key: G`) |
-| `m` | Toggle strict / relaxed chord parsing |
-| `i` | Import the loaded chart into the library |
-| `s` | Save the converted chart into the library (after an AI conversion) |
-| `d` | Delete the highlighted library chart (`y`/`n` confirms/cancels) |
-| `o` | Pick a chart file from `./charts` (`.cho .crd .chopro .chord .pro .txt`) |
-| `L` / `S` | Browse the chart library / setlists |
-| `esc` | Return to the main menu (when launched from it) |
-| `h` | Return to the main menu from any screen (home) |
-| `c` | Convert the loaded chart to ChordPro via AI |
+| Key                     | Action                                                                   |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `q` / `ctrl+c`          | Quit                                                                     |
+| `j` / `k` or arrows     | Scroll down / up                                                         |
+| `space` / `PgDn`        | Page down                                                                |
+| `b` / `PgUp`            | Page up                                                                  |
+| `g` / `G` or home / end | Jump to top / bottom                                                     |
+| `+` / `-`               | Transpose up / down (header shows the current key, e.g. `Key: G`)        |
+| `m`                     | Toggle strict / relaxed chord parsing                                    |
+| `i`                     | Import the loaded chart into the library                                 |
+| `s`                     | Save the converted chart into the library (after an AI conversion)       |
+| `d`                     | Delete the highlighted library chart (`y`/`n` confirms/cancels)          |
+| `o`                     | Pick a chart file from `./charts` (`.cho .crd .chopro .chord .pro .txt`) |
+| `L` / `S`               | Browse the chart library / setlists                                      |
+| `esc`                   | Return to the main menu (when launched from it)                          |
+| `h`                     | Return to the main menu from any screen (home)                           |
+| `c`                     | Convert the loaded chart to ChordPro via AI                              |
 
 Keys are remappable via config; `c` is not.
 
