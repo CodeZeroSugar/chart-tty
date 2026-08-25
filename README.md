@@ -230,6 +230,14 @@ go vet ./...
 
 See `AGENTS.md` for the agentic workflow guide and `docs/LESSONS.md` for known pitfalls.
 
+## Roadmap
+
+Here are some features planned for the future:
+
+- Integration with USB and/or midi foot-pedals for hands-free chart navigation.
+- Chord sheet web-scraping client to get new charts without leaving the application.
+- PDF parser to read and render .pdf formatted chord sheets.
+
 ## License
 
 Released under the [MIT License](LICENSE).
