@@ -21,7 +21,7 @@ If you are a tech-savvy individual who doesn't use a tablet for displaying chart
 
 ## Install
 
-Requires Go 1.26+.
+Requires [Go 1.26+](https://go.dev/).
 
 ```sh
 go build ./cmd/chart-tty
