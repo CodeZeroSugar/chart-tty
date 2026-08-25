@@ -15,6 +15,11 @@ type RenderConfig struct {
 	BannerStyle    lipgloss.Style
 	TitleStyle     lipgloss.Style
 	HighlightStyle lipgloss.Style
+
+	// SuppressMetaTitleKey omits the title line and the Key: segment from the
+	// body metadata block. The TUI sets it because the persistent header row
+	// already shows the title and the live transposed key.
+	SuppressMetaTitleKey bool
 }
 
 func RenderConfigFromConfig(cfg config.Config) RenderConfig {
@@ -64,26 +69,27 @@ func Render(doc *parser.Document, cfg RenderConfig) []string {
 func renderMetaBlock(doc *parser.Document, cfg RenderConfig) []string {
 	var out []string
 	faint := lipgloss.NewStyle().Faint(true)
-	if doc.Title != "" {
+	if doc.Title != "" && !cfg.SuppressMetaTitleKey {
 		out = append(out, applyStyle(doc.Title, cfg.HeaderStyle))
 	}
 	if doc.Artist != "" {
 		out = append(out, faint.Render(doc.Artist))
 	}
-	if meta := metaLine(doc); meta != "" {
+	if meta := metaLine(doc, cfg.SuppressMetaTitleKey); meta != "" {
 		out = append(out, faint.Render(meta))
 	}
 	return out
 }
 
 // metaLine joins the present performance metadata into a single line:
-// Capo · Key · Tempo · Time · Duration, in that order.
-func metaLine(doc *parser.Document) string {
+// Capo · Key · Tempo · Time · Duration, in that order. When skipKey is set the
+// Key: segment is omitted (the TUI header already shows the transposed key).
+func metaLine(doc *parser.Document, skipKey bool) string {
 	parts := make([]string, 0, 5)
 	if doc.Capo != "" {
 		parts = append(parts, "Capo: "+doc.Capo)
 	}
-	if doc.Key != "" {
+	if doc.Key != "" && !skipKey {
 		parts = append(parts, "Key: "+doc.Key)
 	}
 	if doc.Tempo != "" {

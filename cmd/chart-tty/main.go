@@ -195,6 +195,11 @@ func main() {
 	if *noColorFlag || os.Getenv("NO_COLOR") != "" {
 		rcfg = ui.RenderConfig{}
 	}
+	// The TUI keeps the title and transposed key in the persistent header row,
+	// so its body metadata block skips them to avoid duplication. Piped output
+	// (no header) keeps the full block.
+	tuiRcfg := rcfg
+	tuiRcfg.SuppressMetaTitleKey = true
 	isTTY := term.IsTerminal(int(os.Stdout.Fd())) && term.IsTerminal(int(os.Stdin.Fd()))
 	aiClient := aichart.FromConfig(appCfg)
 
@@ -222,7 +227,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer store.Close()
-		m := ui.NewMenuModel(store, rcfg).SetKeys(appCfg.Keys).SetConverter(&aiClient)
+		m := ui.NewMenuModel(store, tuiRcfg).SetKeys(appCfg.Keys).SetConverter(&aiClient)
 		if err := ui.RunModel(m); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: TUI failed: %v\n", err)
 			os.Exit(1)
@@ -303,7 +308,7 @@ func main() {
 		}
 		defer store.Close()
 
-		m := ui.NewDocModel(doc, rcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys).SetStore(store).SetSource(originalChart)
+		m := ui.NewDocModel(doc, tuiRcfg).SetTranspose(*transposeFlag).SetKeys(appCfg.Keys).SetStore(store).SetSource(originalChart)
 		m = m.SetConverter(&aiClient)
 		if err := ui.RunModel(m); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: TUI failed: %v\n", err)

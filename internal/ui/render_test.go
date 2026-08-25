@@ -214,10 +214,45 @@ func TestMetaLinePresentOnly(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := metaLine(tt.doc); got != tt.want {
+			if got := metaLine(tt.doc, false); got != tt.want {
 				t.Errorf("metaLine() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMetaLineSkipKey(t *testing.T) {
+	doc := &parser.Document{Capo: "2", Key: "G", Tempo: "112", Metadata: map[string][]string{"time": {"4/4"}}}
+	if got := metaLine(doc, true); got != "Capo: 2 · Tempo: 112 · Time: 4/4" {
+		t.Errorf("metaLine(skipKey) = %q, want %q", got, "Capo: 2 · Tempo: 112 · Time: 4/4")
+	}
+}
+
+func TestRenderMetaBlockSuppressesTitleAndKey(t *testing.T) {
+	doc := &parser.Document{
+		Title:    "Long Road Home",
+		Artist:   "Chart TTY",
+		Key:      "G",
+		Tempo:    "112",
+		Capo:     "2",
+		Metadata: map[string][]string{},
+	}
+	cfg := RenderConfig{SuppressMetaTitleKey: true}
+	block := renderMetaBlock(doc, cfg)
+	want := []string{"Chart TTY", "Capo: 2 · Tempo: 112"}
+	if !reflect.DeepEqual(block, want) {
+		t.Errorf("renderMetaBlock() = %#v, want %#v", block, want)
+	}
+
+	// The title and key remain in the full piped Render output.
+	cfg = RenderConfig{}
+	doc.Sections = []parser.Section{{
+		Name:  "verse",
+		Lines: []parser.ParsedLine{{Type: parser.LineTypeLyric, Raw: "Home", Lyrics: "Home"}},
+	}}
+	got := Render(doc, RenderConfig{})
+	if got[0] != "Long Road Home" || !strings.Contains(got[2], "Key: G") {
+		t.Errorf("piped Render lost title/key: %#v", got)
 	}
 }
 
