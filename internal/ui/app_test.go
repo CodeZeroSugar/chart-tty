@@ -937,6 +937,79 @@ func TestMainMenuDispatch(t *testing.T) {
 	}
 }
 
+func TestEscFromViewerReturnsToMenu(t *testing.T) {
+	s := testStore(t)
+	doc := &parser.Document{Title: "T", Metadata: map[string][]string{}}
+	// fromMenu=true (bare-launch path): esc in the viewer returns to the menu.
+	m := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.fromMenu = true
+	m.screen = screenViewChart
+
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	if got := m.Screen(); got != "mainMenu" {
+		t.Errorf("esc from viewer (fromMenu) -> %q, want mainMenu", got)
+	}
+
+	// fromMenu=false (file-arg launch): esc is a no-op, stays on the viewer.
+	m2 := update(t, NewDocModel(doc, RenderConfig{}).SetShowHelp(false), tea.WindowSizeMsg{Width: 80, Height: 24})
+	m2.fromMenu = false
+	m2.screen = screenViewChart
+	m2 = update(t, m2, tea.KeyMsg{Type: tea.KeyEsc})
+	if got := m2.Screen(); got != "viewChart" {
+		t.Errorf("esc from viewer (file-arg) -> %q, want viewChart", got)
+	}
+	_ = s
+}
+
+func TestListScreensCenteredLayout(t *testing.T) {
+	s := testStore(t)
+	_, _ = s.AddChart("A Song With A Long Name Here", "", "import", "{title: X}\n[G]y")
+	_, _ = s.AddChart("B", "", "import", "{title: B}\n[C]z")
+
+	m := update(t, NewModel(testLines(3), RenderConfig{}).SetShowHelp(false).SetStore(s), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
+
+	lines := strings.Split(m.View(), "\n")
+	// The centered "Library" title line is indented; the full-width header
+	// also shows "Library" at the left margin, so pick the indented one.
+	titleLine := ""
+	for _, ln := range lines {
+		if strings.TrimSpace(ln) == "Library" {
+			leading := len(ln) - len(strings.TrimLeft(ln, " "))
+			if leading > 0 {
+				titleLine = ln
+				break
+			}
+		}
+	}
+	if titleLine == "" {
+		t.Fatal("centered Library title not found in view")
+	}
+	// Row lines should be left-aligned at a common indent (centered block),
+	// not starting at the left margin.
+	rowLines := 0
+	lastIndent := -1
+	for _, ln := range lines {
+		trimmed := strings.TrimSpace(ln)
+		if strings.HasPrefix(trimmed, "> ") || strings.HasPrefix(trimmed, "  ") {
+			ind := len(ln) - len(strings.TrimLeft(ln, " "))
+			if lastIndent < 0 {
+				lastIndent = ind
+			}
+			if ind != lastIndent {
+				t.Errorf("row indents differ: %d vs %d", ind, lastIndent)
+			}
+			rowLines++
+		}
+	}
+	if rowLines == 0 {
+		t.Fatal("no list rows rendered")
+	}
+	if lastIndent <= 0 {
+		t.Errorf("list rows not centered (indent %d)", lastIndent)
+	}
+}
+
 func TestDeleteChartFromBrowser(t *testing.T) {
 	s := testStore(t)
 	id1, _ := s.AddChart("Keep Me", "", "import", "{title: Keep Me}\n[G]x")

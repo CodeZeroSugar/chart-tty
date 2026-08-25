@@ -53,6 +53,7 @@ plain text instead.
 | `i` | Import the loaded chart into the library |
 | `o` | Pick a chart file from `./charts` (`.cho .crd .chopro .chord .pro .txt`) |
 | `L` / `S` | Browse the chart library / setlists |
+| `esc` | Return to the main menu (when launched from it) |
 | `c` | Convert the loaded chart to ChordPro via AI |
 
 Keys are remappable via config; `c` is not.

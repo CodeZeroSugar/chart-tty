@@ -66,21 +66,21 @@ type Model struct {
 
 	lastConverted string
 
-	screen           screen
-	store            *db.Store
-	browseCharts     []db.ChartMeta
-	browseCursor     int
-	deletePending    string // title awaiting y/n confirmation
-	setlists         []db.SetlistMeta
-	setlistCursor    int
-	inputMode        bool
-	nameInput        textinput.Model
-	pickDir          string
-	pickFiles        []string
-	pickCursor       int
-	menuIndex        int
-	menuOpenFromMenu bool
-	setlist          struct {
+	screen        screen
+	store         *db.Store
+	browseCharts  []db.ChartMeta
+	browseCursor  int
+	deletePending string // title awaiting y/n confirmation
+	setlists      []db.SetlistMeta
+	setlistCursor int
+	inputMode     bool
+	nameInput     textinput.Model
+	pickDir       string
+	pickFiles     []string
+	pickCursor    int
+	menuIndex     int
+	fromMenu      bool
+	setlist       struct {
 		name   string
 		charts []setlistChartView
 		index  int
@@ -159,6 +159,7 @@ func NewMenuModel(store *db.Store, cfg RenderConfig) Model {
 	m.store = store
 	m.screen = screenMainMenu
 	m.menuIndex = 0
+	m.fromMenu = true
 	ti := textinput.New()
 	ti.Placeholder = "setlist name"
 	ti.CharLimit = 60
@@ -664,6 +665,11 @@ func (m Model) updateViewChartKeys(k string) (tea.Model, tea.Cmd) {
 	case k == "s":
 		m = m.saveConvertedChart()
 		return m, nil
+	case k == "esc":
+		if m.fromMenu {
+			m.screen = screenMainMenu
+			return m, nil
+		}
 	}
 	m.clampOffset()
 	return m, nil
@@ -778,45 +784,73 @@ func (m Model) View() string {
 }
 
 // viewBrowseCharts renders the library listing with a cursor.
+// centerBlock returns the left indent so a block of the given display width
+// is horizontally centered within `width`.
+func centerBlock(width, blockWidth int) int {
+	indent := (width - blockWidth) / 2
+	if indent < 0 {
+		indent = 0
+	}
+	return indent
+}
+
 func (m Model) viewBrowseCharts() string {
 	var sb strings.Builder
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Library"))
-	sb.WriteString("\n\n")
+	// Full-width status header (title-left / message-right).
+	sb.WriteString(headerRow("Library", m.message, m.messageStyle(), m.width))
+	sb.WriteString("\n")
 
 	if m.deletePending != "" {
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow")).Render(fmt.Sprintf("Delete %q? (y/n)", m.deletePending)))
+		banner := fmt.Sprintf("Delete %q? (y/n)", m.deletePending)
+		indent := centerBlock(m.width, displayWidth(banner))
+		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("yellow")).Render(banner))
 		sb.WriteString("\n\n")
 	} else {
-		sb.WriteString(headerRow("Library", m.message, m.messageStyle(), m.width))
-		sb.WriteString("\n\n")
+		sb.WriteString("\n")
 	}
 
 	if len(m.browseCharts) == 0 {
-		sb.WriteString("(library is empty — import a chart with i from the viewer)")
+		msg := "(library is empty — import a chart with i from the viewer)"
+		indent := centerBlock(m.width, displayWidth(msg))
+		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(msg))
 		return sb.String()
 	}
 
-	bodyHeight := m.bodyHeight() - 3 // title row, blank line, and gap before help
+	// Centered title over a left-aligned, centered list block.
+	blockWidth := 0
+	for _, c := range m.browseCharts {
+		row := fmt.Sprintf("%s %s — %s [%s]", c.Title, c.Artist, c.Source, c.UpdatedAt.Format("2006-01-02"))
+		if w := displayWidth(row); w > blockWidth {
+			blockWidth = w
+		}
+	}
+	title := "Library"
+	titleIndent := centerBlock(m.width, blockWidth) + (blockWidth-displayWidth(title))/2
+	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render(title))
+	sb.WriteString("\n\n")
+
+	listIndent := centerBlock(m.width, blockWidth)
+	bodyHeight := m.bodyHeight() - 4 // header, centered title, blank line, and gap before help
 	start := max(m.browseCursor-bodyHeight+1, 0)
 	end := min(start+bodyHeight, len(m.browseCharts))
 
 	for i := start; i < end; i++ {
 		c := m.browseCharts[i]
-		marker := "  "
-		row := lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("%s %s — %s [%s]", c.Title, c.Artist, c.Source, c.UpdatedAt.Format("2006-01-02")))
+		text := fmt.Sprintf("%s %s — %s [%s]", c.Title, c.Artist, c.Source, c.UpdatedAt.Format("2006-01-02"))
 		if i == m.browseCursor {
-			marker = "> "
-			row = lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s %s — %s [%s]", c.Title, c.Artist, c.Source, c.UpdatedAt.Format("2006-01-02")))
+			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Bold(true).Render("> "+text))
+		} else {
+			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Faint(true).Render("  "+text))
 		}
-		sb.WriteString(marker + row)
 		sb.WriteString("\n")
 	}
 	hint := "j/k move · enter open · s add to setlist · d delete · esc back"
 	if m.deletePending != "" {
 		hint = "y confirm delete · n/esc cancel"
 	}
+	indent := centerBlock(m.width, displayWidth(hint))
 	sb.WriteString("\n")
-	sb.WriteString(lipgloss.NewStyle().Faint(true).Render(hint))
+	sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(hint))
 	return sb.String()
 }
 
@@ -851,37 +885,54 @@ func (m Model) viewBrowseSetlists(picking bool) string {
 		header = "Add \"" + m.browseCharts[m.browseCursor].Title + "\" to:"
 	}
 	sb.WriteString(headerRow(header, m.message, m.messageStyle(), m.width))
-	sb.WriteString("\n\n")
+	sb.WriteString("\n")
 
 	if m.inputMode {
-		sb.WriteString("New setlist: " + m.nameInput.View() + "\n")
+		line := "New setlist: " + m.nameInput.View()
+		indent := centerBlock(m.width, displayWidth(line))
+		sb.WriteString(strings.Repeat(" ", indent) + line)
+		sb.WriteString("\n")
 		return sb.String()
 	}
 
 	if len(m.setlists) == 0 {
-		sb.WriteString("(no setlists — press n to create one)")
+		msg := "(no setlists — press n to create one)"
+		indent := centerBlock(m.width, displayWidth(msg))
+		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(msg))
 		return sb.String()
 	}
 
-	bodyHeight := m.bodyHeight() - 3 // title row, blank line, and gap before help
+	blockWidth := 0
+	for _, sl := range m.setlists {
+		if w := displayWidth(sl.Name); w > blockWidth {
+			blockWidth = w
+		}
+	}
+	titleIndent := centerBlock(m.width, blockWidth) + (blockWidth-displayWidth(header))/2
+	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render(header))
+	sb.WriteString("\n\n")
+
+	listIndent := centerBlock(m.width, blockWidth)
+	bodyHeight := m.bodyHeight() - 4
 	start := max(m.setlistCursor-bodyHeight+1, 0)
 	end := min(start+bodyHeight, len(m.setlists))
 
 	for i := start; i < end; i++ {
 		sl := m.setlists[i]
-		marker, style := "  ", lipgloss.NewStyle().Faint(true)
 		if i == m.setlistCursor {
-			marker, style = "> ", lipgloss.NewStyle().Bold(true)
+			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Bold(true).Render("> "+sl.Name))
+		} else {
+			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Faint(true).Render("  "+sl.Name))
 		}
-		sb.WriteString(marker + style.Render(sl.Name))
 		sb.WriteString("\n")
 	}
 	hint := "j/k move · enter open · n new · esc back"
 	if picking {
 		hint = "j/k choose · enter add · esc cancel"
 	}
+	indent := centerBlock(m.width, displayWidth(hint))
 	sb.WriteString("\n")
-	sb.WriteString(lipgloss.NewStyle().Faint(true).Render(hint))
+	sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(hint))
 	return sb.String()
 }
 
@@ -993,9 +1044,9 @@ func (m Model) updatePickFileKeys(k string) (tea.Model, tea.Cmd) {
 			return m.startConversion()
 		}
 	case "esc":
-		if m.menuOpenFromMenu {
+		if m.fromMenu {
 			m.screen = screenMainMenu
-			m.menuOpenFromMenu = false
+
 		} else {
 			m.screen = screenViewChart
 		}
@@ -1030,26 +1081,44 @@ func (m Model) openDiskFile(path string) (tea.Model, tea.Cmd) {
 func (m Model) viewPickFile() string {
 	var sb strings.Builder
 	sb.WriteString(headerRow("Pick a chart  "+m.pickDir, m.message, m.messageStyle(), m.width))
-	sb.WriteString("\n\n")
+	sb.WriteString("\n")
 
 	if len(m.pickFiles) == 0 {
-		sb.WriteString("(no chart files found)")
+		msg := "(no chart files found)"
+		indent := centerBlock(m.width, displayWidth(msg))
+		sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(msg))
 		return sb.String()
 	}
 
-	rows := max(m.bodyHeight()-3, 1)
+	blockWidth := 0
+	names := make([]string, len(m.pickFiles))
+	for i, p := range m.pickFiles {
+		names[i] = filepath.Base(p)
+		if w := displayWidth(names[i]); w > blockWidth {
+			blockWidth = w
+		}
+	}
+	title := "Pick a chart"
+	titleIndent := centerBlock(m.width, blockWidth) + (blockWidth-displayWidth(title))/2
+	sb.WriteString(strings.Repeat(" ", titleIndent) + lipgloss.NewStyle().Bold(true).Render(title))
+	sb.WriteString("\n\n")
+
+	listIndent := centerBlock(m.width, blockWidth)
+	rows := max(m.bodyHeight()-4, 1)
 	start := max(m.pickCursor-rows+1, 0)
 	end := min(start+rows, len(m.pickFiles))
 	for i := start; i < end; i++ {
-		marker, style := "  ", lipgloss.NewStyle().Faint(true)
 		if i == m.pickCursor {
-			marker, style = "> ", lipgloss.NewStyle().Bold(true)
+			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Bold(true).Render("> "+names[i]))
+		} else {
+			sb.WriteString(strings.Repeat(" ", listIndent) + lipgloss.NewStyle().Faint(true).Render("  "+names[i]))
 		}
-		sb.WriteString(marker + style.Render(filepath.Base(m.pickFiles[i])))
 		sb.WriteString("\n")
 	}
+	hint := "j/k move · enter open · esc back"
+	indent := centerBlock(m.width, displayWidth(hint))
 	sb.WriteString("\n")
-	sb.WriteString(lipgloss.NewStyle().Faint(true).Render("j/k move · enter open · esc back"))
+	sb.WriteString(strings.Repeat(" ", indent) + lipgloss.NewStyle().Faint(true).Render(hint))
 	return sb.String()
 }
 
@@ -1172,7 +1241,6 @@ func (m Model) updateMainMenuKeys(k string) (tea.Model, tea.Cmd) {
 		case menuSetlists:
 			return m.openSetlistBrowser()
 		case menuOpen:
-			m.menuOpenFromMenu = true
 			return m.openFilePicker()
 		case menuExit:
 			m.quitting = true
