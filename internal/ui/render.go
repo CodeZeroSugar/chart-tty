@@ -19,11 +19,11 @@ type RenderConfig struct {
 
 func RenderConfigFromConfig(cfg config.Config) RenderConfig {
 	return RenderConfig{
-		HeaderStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HeaderColor)),
-		CommentStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color(cfg.Theme.CommentColor)),
-		BannerStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HeaderColor)),
-		TitleStyle:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HeaderColor)),
-		HighlightStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cfg.Theme.HighlightColor)),
+		HeaderStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(resolveColor(cfg.Theme.HeaderColor))),
+		CommentStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color(resolveColor(cfg.Theme.CommentColor))),
+		BannerStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(resolveColor(cfg.Theme.HeaderColor))),
+		TitleStyle:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(resolveColor(cfg.Theme.HeaderColor))),
+		HighlightStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(resolveColor(cfg.Theme.HighlightColor))),
 	}
 }
 

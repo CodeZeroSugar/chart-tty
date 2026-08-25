@@ -2,13 +2,38 @@ package ui
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/CodeZeroSugar/chart-tty/internal/config"
 	"github.com/CodeZeroSugar/chart-tty/internal/parser"
 )
+
+func TestResolveColor(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"cyan", "6"},
+		{"yellow", "3"},
+		{"magenta", "5"},
+		{"red", "1"},
+		{"gray", "8"},
+		{"grey", "8"},
+		{"brightblue", "12"},
+		{"CYAN", "6"}, // case-insensitive
+		{"#ff8800", "#ff8800"},
+		{"196", "196"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := resolveColor(tt.in); got != tt.want {
+			t.Errorf("resolveColor(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
 
 func TestRenderMixedSection(t *testing.T) {
 	doc := &parser.Document{
@@ -166,6 +191,42 @@ func TestRenderConfigFromConfig(t *testing.T) {
 	wantHighlight := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("red")).Render("> Library")
 	if got := rcfg.HighlightStyle.Render("> Library"); got != wantHighlight {
 		t.Errorf("HighlightStyle.Render() = %q, want %q", got, wantHighlight)
+	}
+}
+
+func TestThemeColorsEmitANSI(t *testing.T) {
+	// Named colors must resolve to real ANSI color codes, not nil. Force a
+	// color-capable profile so lipgloss actually emits SGR color sequences.
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(prev)
+
+	rcfg := RenderConfigFromConfig(config.Default()) // header=cyan, comment=yellow, highlight=yellow
+	wantHeader := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")).Render("[chorus]")
+	if got := rcfg.HeaderStyle.Render("[chorus]"); got != wantHeader {
+		t.Errorf("HeaderStyle.Render() = %q, want %q", got, wantHeader)
+	}
+	if !strings.Contains(rcfg.HeaderStyle.Render("[chorus]"), "\x1b[") {
+		t.Errorf("HeaderStyle emits no ANSI color: %q", rcfg.HeaderStyle.Render("[chorus]"))
+	}
+	if !strings.Contains(rcfg.CommentStyle.Render("hi"), "\x1b[") {
+		t.Errorf("CommentStyle emits no ANSI color: %q", rcfg.CommentStyle.Render("hi"))
+	}
+	if !strings.Contains(rcfg.HighlightStyle.Render("> x"), "\x1b[") {
+		t.Errorf("HighlightStyle emits no ANSI color: %q", rcfg.HighlightStyle.Render("> x"))
+	}
+
+	// End to end: a rendered section header carries a color code.
+	doc := &parser.Document{
+		Metadata: map[string][]string{},
+		Sections: []parser.Section{{
+			Name:  "chorus",
+			Lines: []parser.ParsedLine{{Type: parser.LineTypeLyric, Raw: "x", Lyrics: "x"}},
+		}},
+	}
+	rendered := Render(doc, rcfg)
+	if len(rendered) == 0 || !strings.Contains(rendered[0], "\x1b[") {
+		t.Errorf("Render() section header has no ANSI color: %#v", rendered)
 	}
 }
 
