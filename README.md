@@ -34,6 +34,7 @@ go build ./cmd/chart-tty
 ## Usage
 
 ```sh
+# Running with no args opens TUI main menu
 chart-tty [flags] <chart file>
 ```
 
