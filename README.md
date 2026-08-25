@@ -48,9 +48,11 @@ plain text instead.
 | `space` / `PgDn` | Page down |
 | `b` / `PgUp` | Page up |
 | `g` / `G` or home / end | Jump to top / bottom |
-| `+` / `-` | Transpose up / down |
+| `+` / `-` | Transpose up / down (header shows the current key, e.g. `Key: G`) |
 | `m` | Toggle strict / relaxed chord parsing |
 | `i` | Import the loaded chart into the library |
+| `s` | Save the converted chart into the library (after an AI conversion) |
+| `d` | Delete the highlighted library chart (`y`/`n` confirms/cancels) |
 | `o` | Pick a chart file from `./charts` (`.cho .crd .chopro .chord .pro .txt`) |
 | `L` / `S` | Browse the chart library / setlists |
 | `esc` | Return to the main menu (when launched from it) |
@@ -58,6 +60,9 @@ plain text instead.
 | `c` | Convert the loaded chart to ChordPro via AI |
 
 Keys are remappable via config; `c` is not.
+
+On the main menu, `↑`/`↓` (or `j`/`k`) moves between options, `enter` selects, and
+`q`/`esc` quits. The viewer and list screens all return to the menu with `h`.
 
 ### Library and setlists
 
@@ -67,11 +72,15 @@ From the TUI:
 
 - **`i`** imports the loaded chart; **`s`** after an AI conversion saves the converted
   version (source tagged `ai`).
-- **`L`** opens the library browser — pick any stored chart with j/k + enter.
+- **`L`** opens the library browser — pick any stored chart with j/k + enter; `c`
+  converts the highlighted chart.
 - **`d`** deletes the highlighted chart (confirmed with `y`; `n`/`esc` cancels).
 - **`S`** opens setlists: `n` creates one (typed name), enter opens it.
-- Inside a setlist, paging past the end of a chart continues to the next chart
-  (and back-paging returns to the previous one) — built for live playback.
+- Inside a setlist, `space`/PgDn advances to the next chart and `b`/PgUp back to the
+  previous; `home`/`g` jumps to the first and `end`/`G` to the last. Paging past a
+  chart's last page continues to the next chart (and back-paging returns to the
+  previous one) — built for live playback. `esc` returns to the setlist list and `c`
+  converts the current chart.
 
 Charts can also be imported from the CLI:
 
@@ -141,8 +150,10 @@ Swing low, sweet chariot,
 Comin' for to carry me home
 ```
 
-Line pairs are recognized automatically. Blank lines separate stanzas, and `#` lines are
-treated as comments (not rendered).
+Line pairs are recognized automatically. A file that fails ChordPro validation (or clearly
+looks like chord-over-lyrics) is routed to basic mode, printing a warning to stderr; this
+auto-detection does not apply to AI-converted output, which is always parsed as ChordPro.
+Blank lines separate stanzas, and `#` lines are treated as comments (not rendered).
 
 ## AI conversion
 
@@ -157,6 +168,8 @@ chart-tty --ai-convert --write <messy-chart.txt>  # also write <name>.pro next t
 
 The converter sends your chart plus a ChordPro rules summary to the model, validates the output
 with the built-in validator, and retries (up to 3 attempts) feeding validation errors back.
+Converted output is always validated with the strict chord grammar — a relaxed
+`--chords relaxed` setting or the `m` toggle does not apply to AI output.
 
 **Privacy:** conversion is strictly opt-in — charts are never sent automatically. Only
 `--ai-convert` or the `c` key in the TUI triggers a request. Local endpoints (Ollama/LM Studio)
@@ -208,6 +221,9 @@ scroll_up = "k"
 transpose_up = "+"
 transpose_down = "-"
 home = "h"
+
+[parser]
+chords = "strict"  # chord grammar for user charts: strict (default) or relaxed
 
 [library]
 # path = "/somewhere/library.db"   # default: ~/.local/share/chart-tty/library.db
