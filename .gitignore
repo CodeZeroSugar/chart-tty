@@ -1,4 +1,5 @@
-charts/
+charts/*
+!charts/long_road_home.pro
 output.txt
 package-lock.json
 

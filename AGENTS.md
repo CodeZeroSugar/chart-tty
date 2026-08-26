@@ -33,7 +33,7 @@ internal/parser/           validation + parsing -> Document
 internal/ui/               render.go (headless Render + RenderConfig), app.go (bubbletea Model + keybinds)
 internal/config/           TOML config: theme colors, keybindings, AI settings
 internal/aichart/          LLM conversion pipeline (OpenAI-compatible client) -> Validator retry loop
-charts/                    local sample charts (gitignored, NOT committed) - smoke-test fixtures
+charts/                    one committed example (long_road_home.pro); the rest are local, gitignored fixtures - smoke-test fixtures
 ```
 
 ## Locked domain rules
@@ -89,7 +89,8 @@ Agents commit automatically at **green checkpoints**: a completed task or milest
 - Conventional Commits format: `feat(scope):`, `fix(scope):`, `test:`, `docs:`, `chore:`.
 - One logical change per commit; production code and its tests go together.
 - Never mix unrelated changes; never commit secrets; stage deliberately.
-- Do not commit `charts/` (gitignored, local fixtures) or `output.txt`.
+- Do not commit anything under `charts/` except the single example chart `long_road_home.pro`
+  (the rest are gitignored, local fixtures). Do not commit `output.txt`.
 
 ## Commands
 
