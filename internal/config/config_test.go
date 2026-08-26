@@ -224,3 +224,48 @@ func TestSetAPIKeyTrimsWhitespaceAndRejectsEmpty(t *testing.T) {
 		t.Errorf("AI.APIKey = %q, want trimmed padded-key", cfg.AI.APIKey)
 	}
 }
+
+func TestWriteDefaultCreatesFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sub", "config.toml")
+	if err := WriteDefault(path); err != nil {
+		t.Fatalf("WriteDefault() unexpected error: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() after write: %v", err)
+	}
+	if cfg.Theme.HeaderColor != "cyan" || cfg.Keys.Quit != "q" || cfg.Parser.Chords != "strict" {
+		t.Errorf("defaults not written: %#v", cfg)
+	}
+	if cfg.AI.BaseURL != "" || cfg.AI.APIKey != "" || cfg.AI.Model != "" {
+		t.Errorf("AI fields must be blank on init, got %#v", cfg.AI)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("file perms = %v, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestWriteDefaultRefusesExisting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := WriteDefault(path); err != nil {
+		t.Fatalf("first WriteDefault() unexpected error: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteDefault(path); err == nil {
+		t.Fatal("WriteDefault() on existing file expected an error")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Error("existing config was modified")
+	}
+}

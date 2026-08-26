@@ -115,6 +115,7 @@ func main() {
 	setKeyFlag := flag.String("set-api-key", "", "store AI API key in config ('-' reads the key from stdin)")
 	importFlag := flag.String("import", "", "import a chart file into the library and exit")
 	deleteFlag := flag.Int("delete", 0, "delete a chart from the library by id and exit")
+	initConfigFlag := flag.Bool("init-config", false, "create a default config file and exit")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -128,6 +129,23 @@ func main() {
 	}
 	if *importFlag != "" {
 		runImport(*configFlag, *importFlag)
+		os.Exit(0)
+	}
+	if *initConfigFlag {
+		cfgPath := *configFlag
+		if cfgPath == "" {
+			var err error
+			cfgPath, err = config.DefaultPath()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		if err := config.WriteDefault(cfgPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Wrote default config to %s\n", cfgPath)
 		os.Exit(0)
 	}
 	if *writeFlag && !*aiConvertFlag {

@@ -124,6 +124,54 @@ api_key = ""             # set via: chart-tty --set-api-key <key>
 model = "gpt-4o-mini"
 `
 
+// initConfigTemplate is what -init-config writes: the default options with
+// the AI section left blank so no provider-specific values are pre-filled.
+const initConfigTemplate = `# chart-tty configuration
+# All fields optional — unset fields fall back to these defaults.
+
+[theme]
+# lipgloss color names: red, green, yellow, blue, magenta, cyan, white, gray,
+# or ANSI numbers 0-255 ("196"), or hex "#ff8800"
+header_color = "cyan"    # section headers like [chorus], titles, main menu banner
+comment_color = "yellow" # {comment:} directive text
+highlight_color = "yellow" # selected row / cursor / delete banner
+
+[keys]
+# Single-key names as bubbletea reports them
+quit = "q"
+scroll_down = "j"
+scroll_up = "k"
+transpose_up = "+"
+transpose_down = "-"
+home = "h"
+
+[parser]
+# Chord grammar for user charts: "strict" (default) or "relaxed".
+# The AI converter always uses strict.
+chords = "strict"
+
+[ai]
+# OpenAI-compatible endpoint. Works with OpenAI, gateways, Ollama/LM Studio local models.
+base_url = ""
+api_key = ""             # set via: chart-tty --set-api-key <key>
+model = ""
+`
+
+// WriteDefault creates a config file at path with the default options and a
+// blank [ai] section. It never overwrites an existing file.
+func WriteDefault(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("config already exists at %s", path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(initConfigTemplate), 0o600); err != nil {
+		return err
+	}
+	return verifyParses(path)
+}
+
 // SetAPIKey stores the API key in the config file without disturbing the rest
 // of the file (comments and unrelated settings are preserved). Missing files
 // are created from the default template. The file is written with 0600

@@ -52,9 +52,10 @@ opens the TUI to the main menu where navigation options are displayed.
 | `--no-color`               | Disable colored output (also honors `NO_COLOR` env var)                        |
 | `--ai-convert`             | Convert chart to compliant ChordPro via AI                                     |
 | `--write`                  | Write converted chart to `<name>.pro` next to source (requires `--ai-convert`) |
-| `--import PATH`            | Import a chart file into the library and exit                                  |
-| `--delete ID`              | Delete a chart from the library by id and exit                                 |
-| `--version`                | Print version and exit                                                         |
+| `--import PATH`            | Import a chart file into the library and exit                                        |
+| `--delete ID`              | Delete a chart from the library by id and exit                                       |
+| `--init-config`            | Create a default config file (blank AI section) and exit                             |
+| `--version`                | Print version and exit                                                               |
 | `-h`, `--help`             | Show usage and exit                                                            |
 
 ### TUI keys
